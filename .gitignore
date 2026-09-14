@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.next/
+uploads/
+mail-preview/
+.env
+.env.local
+.env.*.local
+*.log
+coverage/
+.DS_Store
+client/.next/
+server/dist/
+server/uploads/
+server/mail-preview/
