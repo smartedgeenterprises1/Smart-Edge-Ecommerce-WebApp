@@ -29,7 +29,18 @@ const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().default(4000),
-    CLIENT_ORIGIN: z.string().url(),
+    CLIENT_ORIGIN: z
+      .string()
+      .min(1)
+      .refine(
+        (value) =>
+          value
+            .split(',')
+            .map((part) => part.trim())
+            .filter(Boolean)
+            .every((part) => z.string().url().safeParse(part).success),
+        { message: 'CLIENT_ORIGIN must be a URL or comma-separated URLs' },
+      ),
     MONGODB_URI: z.string().min(1),
     SESSION_SECRET: z.string().min(32),
     CSRF_SECRET: z.string().min(16),
@@ -87,3 +98,7 @@ if (!parsed.success) {
 
 export const env = parsed.data;
 export type Env = typeof env;
+
+export const allowedClientOrigins = env.CLIENT_ORIGIN.split(',')
+  .map((part) => part.trim())
+  .filter(Boolean);

@@ -6,7 +6,7 @@ import compression from 'compression';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
-import { env } from './config/env.js';
+import { env, allowedClientOrigins } from './config/env.js';
 import { loadSession } from './middleware/auth.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { authRouter } from './modules/auth/auth.routes.js';
@@ -29,7 +29,13 @@ export async function createApp() {
   );
   app.use(
     cors({
-      origin: env.CLIENT_ORIGIN,
+      origin(origin, callback) {
+        if (!origin || allowedClientOrigins.includes(origin)) {
+          callback(null, true);
+          return;
+        }
+        callback(new Error(`Origin ${origin} not allowed by CORS`));
+      },
       credentials: true,
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Idempotency-Key', 'X-CSRF-Token'],
     }),
