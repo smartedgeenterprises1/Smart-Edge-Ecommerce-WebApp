@@ -3,6 +3,28 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+/** Railway injects RAILWAY_PUBLIC_DOMAIN; use it when PUBLIC_API_URL is unset. */
+function resolvePublicApiUrl(): string | undefined {
+  const raw = process.env.PUBLIC_API_URL?.trim();
+  // Ignore unresolved Railway template literals pasted as plain text
+  const explicit =
+    raw && !raw.includes('${{') && !raw.includes('{{') ? raw.replace(/\/$/, '') : undefined;
+  if (explicit) return explicit;
+
+  const railwayDomain = process.env.RAILWAY_PUBLIC_DOMAIN?.trim();
+  if (railwayDomain) {
+    const host = railwayDomain.replace(/^https?:\/\//, '');
+    return `https://${host}`;
+  }
+
+  const railwayStatic = process.env.RAILWAY_STATIC_URL?.trim();
+  if (railwayStatic) return railwayStatic.replace(/\/$/, '');
+
+  return undefined;
+}
+
+process.env.PUBLIC_API_URL = resolvePublicApiUrl();
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(4000),
