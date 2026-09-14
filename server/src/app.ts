@@ -54,8 +54,9 @@ export async function createApp() {
     res.json({ ok: true, service: 'smart-edge-api', store: env.STORE_NAME });
   });
 
-  app.use('/uploads', express.static(path.resolve(process.cwd(), env.UPLOAD_DIR), { maxAge: '7d' }));
-
+  if (env.STORAGE_DRIVER === 'local') {
+    app.use('/uploads', express.static(path.resolve(process.cwd(), env.UPLOAD_DIR), { maxAge: '7d' }));
+  }
   app.use('/api/auth', authRouter);
   app.use('/api/catalog', catalogRouter);
   app.use('/api/cart', cartRouter);
