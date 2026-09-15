@@ -67,16 +67,27 @@ export default async function HomePage() {
           </Link>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {(brands || []).map((b, i) => (
-            <Link
-              key={b._id}
-              href={`/brand/${b.slug}`}
-              className={`animate-fade-up flex min-h-[7.5rem] items-center justify-center rounded-2xl border border-border bg-white px-6 py-8 shadow-sm transition hover:-translate-y-0.5 hover:border-primary hover:shadow-md animate-delay-${(i % 3) + 1}`}
-              aria-label={`Shop ${b.name} covers`}
-            >
-              <BrandLogo slug={b.slug} name={b.name} logoUrl={b.logoUrl} />
-            </Link>
-          ))}
+          {(
+            [
+              { slug: 'apple', name: 'Apple' },
+              { slug: 'google', name: 'Google' },
+              { slug: 'samsung', name: 'Samsung' },
+            ] as const
+          ).map((fallback, i) => {
+            const fromApi = (brands || []).find((b) => b.slug === fallback.slug);
+            const slug = fromApi?.slug || fallback.slug;
+            const name = fromApi?.name || fallback.name;
+            return (
+              <Link
+                key={slug}
+                href={`/shop?brand=${slug}`}
+                className={`animate-fade-up flex min-h-[7.5rem] items-center justify-center rounded-2xl border border-border bg-white px-6 py-8 shadow-sm transition hover:-translate-y-0.5 hover:border-primary hover:shadow-md animate-delay-${(i % 3) + 1}`}
+                aria-label={`Shop all ${name} covers`}
+              >
+                <BrandLogo slug={slug} name={name} logoUrl={fromApi?.logoUrl} />
+              </Link>
+            );
+          })}
         </div>
       </section>
 

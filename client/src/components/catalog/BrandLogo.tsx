@@ -41,7 +41,7 @@ export function BrandLogo({
       alt={`${name} logo`}
       width={140}
       height={56}
-      className={cn('mx-auto h-10 w-auto object-contain sm:h-12', className)}
+      className={cn('mx-auto h-12 w-auto object-contain sm:h-14', className)}
       unoptimized
     />
   );

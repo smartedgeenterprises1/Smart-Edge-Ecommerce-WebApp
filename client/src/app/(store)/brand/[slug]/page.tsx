@@ -24,7 +24,7 @@ export default async function BrandPage({ params }: { params: Promise<{ slug: st
   const [brands, models, products] = await Promise.all([
     publicApiGet<Brand[]>('/api/catalog/brands'),
     publicApiGet<DeviceModel[]>(`/api/catalog/device-models?brand=${slug}`),
-    publicApiGet<{ items: ProductListItem[] }>(`/api/catalog/products?brand=${slug}&limit=12`),
+    publicApiGet<{ items: ProductListItem[] }>(`/api/catalog/products?brand=${slug}&limit=48`),
   ]);
   const brand = brands.find((b: Brand) => b.slug === slug);
   if (!brand) notFound();
@@ -45,7 +45,15 @@ export default async function BrandPage({ params }: { params: Promise<{ slug: st
         ))}
       </div>
 
-      <h2 className="mt-12 font-display text-2xl font-bold">Popular covers</h2>
+      <div className="mt-10 flex flex-wrap items-end justify-between gap-3">
+        <h2 className="font-display text-2xl font-bold">All {brand.name} covers</h2>
+        <Link
+          href={`/shop?brand=${brand.slug}`}
+          className="text-sm font-semibold text-primary-ink hover:underline"
+        >
+          View all in shop
+        </Link>
+      </div>
       <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         {products.items.map((p: ProductListItem) => (
           <ProductCard key={p._id} product={p} />
