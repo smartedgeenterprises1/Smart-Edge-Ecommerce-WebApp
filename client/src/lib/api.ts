@@ -40,18 +40,29 @@ async function parseJson(res: Response) {
 export async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T> {
   const { cookie, soft, headers, ...rest } = options;
   const hdrs = new Headers(headers);
+  const url = joinUrl(path);
 
   if (rest.body && !hdrs.has('Content-Type') && !(rest.body instanceof FormData)) {
     hdrs.set('Content-Type', 'application/json');
   }
   if (cookie) hdrs.set('Cookie', cookie);
 
-  const res = await fetch(joinUrl(path), {
-    ...rest,
-    headers: hdrs,
-    credentials: 'include',
-    cache: rest.cache ?? 'no-store',
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...rest,
+      headers: hdrs,
+      credentials: 'include',
+      cache: rest.cache ?? 'no-store',
+    });
+  } catch {
+    if (soft) return null as T;
+    throw new ApiRequestError(
+      `Cannot reach API (${config.apiUrl}). Check NEXT_PUBLIC_API_URL and that Railway is online.`,
+      0,
+      'NETWORK',
+    );
+  }
 
   const json = (await parseJson(res)) as ApiSuccess<T> | ApiError | null;
 
@@ -59,7 +70,10 @@ export async function apiFetch<T>(path: string, options: FetchOptions = {}): Pro
     const err = (json as ApiError)?.error;
     if (soft) return null as T;
     throw new ApiRequestError(
-      err?.message || res.statusText || 'Request failed',
+      err?.message ||
+        (res.status === 0
+          ? 'Network error'
+          : `API error ${res.status}${res.statusText ? `: ${res.statusText}` : ''}`),
       res.status,
       err?.code,
       err?.details,

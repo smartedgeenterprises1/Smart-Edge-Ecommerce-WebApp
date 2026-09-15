@@ -34,7 +34,7 @@ export async function createApp() {
           callback(null, true);
           return;
         }
-        callback(new Error(`Origin ${origin} not allowed by CORS`));
+        callback(null, false);
       },
       credentials: true,
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Idempotency-Key', 'X-CSRF-Token'],
