@@ -173,26 +173,22 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
 
         {modelsForColor.length ? (
           <fieldset>
-            <legend className="label">Device model</legend>
-            <div className="flex flex-wrap gap-2">
+            <legend className="label">Choose your phone model</legend>
+            <select
+              className="input mt-1 w-full max-w-md"
+              value={deviceKey}
+              onChange={(e) => setDeviceKey(e.target.value)}
+              aria-label="Phone model"
+            >
               {modelsForColor.map((v) => {
                 const key = modelId(v) || 'universal';
                 return (
-                  <button
-                    key={v._id}
-                    type="button"
-                    onClick={() => setDeviceKey(key)}
-                    className={cn(
-                      'rounded-full border px-3 py-1.5 text-sm font-medium',
-                      deviceKey === key ? 'border-primary-deep bg-primary-soft' : 'border-border bg-white',
-                    )}
-                    aria-pressed={deviceKey === key}
-                  >
+                  <option key={v._id} value={key}>
                     {modelLabel(v)}
-                  </button>
+                  </option>
                 );
               })}
-            </div>
+            </select>
           </fieldset>
         ) : null}
 

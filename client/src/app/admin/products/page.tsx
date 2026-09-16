@@ -1,14 +1,21 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { formatPkr, toMinor } from '@/lib/format';
+import { mediaUrl } from '@/lib/config';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Select, Textarea } from '@/components/ui/field';
 import { Spinner, Badge } from '@/components/ui/misc';
-import type { ProductListItem } from '@/types';
+import type { Brand, DeviceModel, ProductListItem } from '@/types';
 
 type ListResult = { items: ProductListItem[]; total: number; page: number; limit: number };
+type ColorRow = { name: string; hex: string; stockOnHand: string };
+
+const DEFAULT_COLORS: ColorRow[] = [
+  { name: 'Black', hex: '#111827', stockOnHand: '10' },
+  { name: 'Clear', hex: '#E5E7EB', stockOnHand: '10' },
+];
 
 export default function AdminProductsPage() {
   const [data, setData] = useState<ListResult | null>(null);
@@ -16,6 +23,16 @@ export default function AdminProductsPage() {
   const [status, setStatus] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [models, setModels] = useState<DeviceModel[]>([]);
+  const [brandId, setBrandId] = useState('');
+  const [selectedModelIds, setSelectedModelIds] = useState<string[]>([]);
+  const [colors, setColors] = useState<ColorRow[]>(DEFAULT_COLORS);
+  const [imageUrl, setImageUrl] = useState('');
+
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -26,6 +43,16 @@ export default function AdminProductsPage() {
     isFeatured: false,
     isNewArrival: true,
   });
+
+  const brandModels = useMemo(() => {
+    if (!brandId) return models;
+    return models.filter((m) => {
+      const id = typeof m.brandId === 'string' ? m.brandId : m.brandId?._id;
+      return id === brandId;
+    });
+  }, [models, brandId]);
+
+  const variantPreview = selectedModelIds.length * colors.filter((c) => c.name.trim()).length;
 
   async function load(page = 1) {
     setLoading(true);
@@ -43,11 +70,73 @@ export default function AdminProductsPage() {
     void load();
   }, [status]);
 
+  useEffect(() => {
+    void (async () => {
+      const [b, m] = await Promise.all([
+        api<Brand[]>('/api/admin/brands'),
+        api<DeviceModel[]>('/api/admin/device-models'),
+      ]);
+      setBrands(b);
+      setModels(m);
+      const apple = b.find((x) => x.slug === 'apple');
+      if (apple) setBrandId(apple._id);
+    })().catch(() => undefined);
+  }, []);
+
+  function toggleModel(id: string) {
+    setSelectedModelIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  function selectAllModels() {
+    setSelectedModelIds(brandModels.map((m) => m._id));
+  }
+
+  function clearModels() {
+    setSelectedModelIds([]);
+  }
+
+  async function onUpload(file: File | null) {
+    if (!file) return;
+    setUploading(true);
+    setMsg('');
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const saved = await api<{ url: string }>('/api/admin/uploads', { method: 'POST', body });
+      setImageUrl(saved.url);
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function createProduct(e: FormEvent) {
     e.preventDefault();
     setMsg('');
+    if (!brandId) {
+      setMsg('Select a brand (Apple / Google / Samsung)');
+      return;
+    }
+    if (!selectedModelIds.length) {
+      setMsg('Select at least one phone model for the dropdown');
+      return;
+    }
+    const cleanColors = colors
+      .map((c) => ({
+        name: c.name.trim(),
+        hex: c.hex.trim() || '#CCCCCC',
+        stockOnHand: Math.max(0, Number(c.stockOnHand) || 0),
+      }))
+      .filter((c) => c.name);
+    if (!cleanColors.length) {
+      setMsg('Add at least one color');
+      return;
+    }
+
+    setBusy(true);
     try {
-      await api('/api/admin/products', {
+      const res = await api<{ product: ProductListItem; variantsCreated: number }>('/api/admin/products', {
         method: 'POST',
         body: JSON.stringify({
           title: form.title,
@@ -58,6 +147,10 @@ export default function AdminProductsPage() {
           material: form.material,
           isFeatured: form.isFeatured,
           isNewArrival: form.isNewArrival,
+          brandIds: [brandId],
+          compatibleDeviceModelIds: selectedModelIds,
+          images: imageUrl ? [{ url: imageUrl, alt: form.title, sortOrder: 0 }] : [],
+          colors: cleanColors,
         }),
       });
       setShowForm(false);
@@ -71,10 +164,15 @@ export default function AdminProductsPage() {
         isFeatured: false,
         isNewArrival: true,
       });
+      setSelectedModelIds([]);
+      setColors(DEFAULT_COLORS);
+      setImageUrl('');
       await load();
-      setMsg('Product created');
+      setMsg(`Product created with ${res.variantsCreated} variants (models × colors)`);
     } catch (err) {
       setMsg(err instanceof Error ? err.message : 'Create failed');
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -90,7 +188,12 @@ export default function AdminProductsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-2xl font-bold text-primary-ink">Products</h1>
+        <div>
+          <h1 className="font-display text-2xl font-bold text-primary-ink">Products</h1>
+          <p className="text-sm text-muted">
+            One cover design = many phone models (customer dropdown) + color variants.
+          </p>
+        </div>
         <div className="flex gap-2">
           <Select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Filter status">
             <option value="">All statuses</option>
@@ -98,18 +201,24 @@ export default function AdminProductsPage() {
             <option value="draft">Draft</option>
             <option value="archived">Archived</option>
           </Select>
-          <Button onClick={() => setShowForm((v) => !v)}>{showForm ? 'Close' : 'New product'}</Button>
+          <Button onClick={() => setShowForm((v) => !v)}>{showForm ? 'Close' : 'New cover'}</Button>
         </div>
       </div>
 
       {msg ? <p className="text-sm text-primary-ink">{msg}</p> : null}
 
       {showForm ? (
-        <form onSubmit={createProduct} className="grid gap-3 rounded-2xl border border-border bg-white p-4 sm:grid-cols-2">
-          <Field label="Title" htmlFor="title">
-            <Input id="title" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+        <form onSubmit={createProduct} className="grid gap-4 rounded-2xl border border-border bg-white p-4 sm:grid-cols-2">
+          <Field label="Cover name / design" htmlFor="title">
+            <Input
+              id="title"
+              required
+              placeholder="e.g. Matte Armor Case"
+              value={form.title}
+              onChange={(e) => setForm({ ...form, title: e.target.value })}
+            />
           </Field>
-          <Field label="Base price (PKR)" htmlFor="basePrice">
+          <Field label="Price (PKR)" htmlFor="basePrice">
             <Input
               id="basePrice"
               type="number"
@@ -118,20 +227,35 @@ export default function AdminProductsPage() {
               onChange={(e) => setForm({ ...form, basePrice: e.target.value })}
             />
           </Field>
+
           <div className="sm:col-span-2">
             <Field label="Description" htmlFor="description">
               <Textarea
                 id="description"
+                placeholder="Same design fits selected models — customer picks their phone + color."
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
               />
             </Field>
           </div>
-          <Field label="Case type" htmlFor="caseType">
-            <Input id="caseType" value={form.caseType} onChange={(e) => setForm({ ...form, caseType: e.target.value })} />
-          </Field>
-          <Field label="Material" htmlFor="material">
-            <Input id="material" value={form.material} onChange={(e) => setForm({ ...form, material: e.target.value })} />
+
+          <Field label="Brand" htmlFor="brand">
+            <Select
+              id="brand"
+              required
+              value={brandId}
+              onChange={(e) => {
+                setBrandId(e.target.value);
+                setSelectedModelIds([]);
+              }}
+            >
+              <option value="">Select brand</option>
+              {brands.map((b) => (
+                <option key={b._id} value={b._id}>
+                  {b.name}
+                </option>
+              ))}
+            </Select>
           </Field>
           <Field label="Status" htmlFor="status">
             <Select id="status" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
@@ -140,6 +264,127 @@ export default function AdminProductsPage() {
               <option value="archived">Archived</option>
             </Select>
           </Field>
+
+          <Field label="Case type" htmlFor="caseType">
+            <Input id="caseType" value={form.caseType} onChange={(e) => setForm({ ...form, caseType: e.target.value })} />
+          </Field>
+          <Field label="Material" htmlFor="material">
+            <Input id="material" value={form.material} onChange={(e) => setForm({ ...form, material: e.target.value })} />
+          </Field>
+
+          <div className="sm:col-span-2 space-y-2 rounded-xl border border-border bg-slate-50 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-primary-ink">Phone models (customer dropdown)</p>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" variant="secondary" onClick={selectAllModels}>
+                  Select all
+                </Button>
+                <Button type="button" size="sm" variant="ghost" onClick={clearModels}>
+                  Clear
+                </Button>
+              </div>
+            </div>
+            <div className="grid max-h-48 grid-cols-1 gap-1 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
+              {brandModels.map((m) => (
+                <label key={m._id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-white">
+                  <input
+                    type="checkbox"
+                    checked={selectedModelIds.includes(m._id)}
+                    onChange={() => toggleModel(m._id)}
+                  />
+                  {m.name}
+                </label>
+              ))}
+            </div>
+            {!brandModels.length ? <p className="text-xs text-muted">No models for this brand yet.</p> : null}
+          </div>
+
+          <div className="sm:col-span-2 space-y-2 rounded-xl border border-border bg-slate-50 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-primary-ink">Colors</p>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => setColors((prev) => [...prev, { name: '', hex: '#CCCCCC', stockOnHand: '10' }])}
+              >
+                Add color
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {colors.map((c, i) => (
+                <div key={i} className="grid grid-cols-[1fr_5rem_5rem_auto] items-end gap-2">
+                  <Field label={i === 0 ? 'Color name' : undefined} htmlFor={`color-${i}`}>
+                    <Input
+                      id={`color-${i}`}
+                      placeholder="Black"
+                      value={c.name}
+                      onChange={(e) => {
+                        const name = e.target.value;
+                        setColors((prev) => prev.map((row, idx) => (idx === i ? { ...row, name } : row)));
+                      }}
+                    />
+                  </Field>
+                  <Field label={i === 0 ? 'Hex' : undefined} htmlFor={`hex-${i}`}>
+                    <Input
+                      id={`hex-${i}`}
+                      type="color"
+                      value={c.hex}
+                      onChange={(e) => {
+                        const hex = e.target.value;
+                        setColors((prev) => prev.map((row, idx) => (idx === i ? { ...row, hex } : row)));
+                      }}
+                    />
+                  </Field>
+                  <Field label={i === 0 ? 'Stock' : undefined} htmlFor={`stock-${i}`}>
+                    <Input
+                      id={`stock-${i}`}
+                      type="number"
+                      min={0}
+                      value={c.stockOnHand}
+                      onChange={(e) => {
+                        const stockOnHand = e.target.value;
+                        setColors((prev) => prev.map((row, idx) => (idx === i ? { ...row, stockOnHand } : row)));
+                      }}
+                    />
+                  </Field>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={colors.length <= 1}
+                    onClick={() => setColors((prev) => prev.filter((_, idx) => idx !== i))}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-muted">
+              Will create <strong>{variantPreview}</strong> sellable variants (each model × each color).
+            </p>
+          </div>
+
+          <div className="sm:col-span-2 space-y-2">
+            <p className="text-sm font-semibold text-primary-ink">Cover image</p>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="btn btn-secondary cursor-pointer">
+                {uploading ? 'Uploading…' : 'Upload image'}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="sr-only"
+                  disabled={uploading}
+                  onChange={(e) => void onUpload(e.target.files?.[0] ?? null)}
+                />
+              </label>
+              {imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={mediaUrl(imageUrl)} alt="" className="h-16 w-16 rounded-lg object-cover" />
+              ) : null}
+            </div>
+          </div>
+
           <div className="flex items-end gap-4">
             <label className="flex items-center gap-2 text-sm">
               <input
@@ -158,8 +403,11 @@ export default function AdminProductsPage() {
               New arrival
             </label>
           </div>
+
           <div className="sm:col-span-2">
-            <Button type="submit">Create product</Button>
+            <Button type="submit" disabled={busy}>
+              {busy ? 'Creating…' : 'Create cover + variants'}
+            </Button>
           </div>
         </form>
       ) : null}

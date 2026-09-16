@@ -130,23 +130,69 @@ adminRouter.post(
       compareAtPriceMinor: z.number().int().min(0).optional(),
       seoTitle: z.string().optional(),
       seoDescription: z.string().optional(),
+      /** Optional: create sellable variants as model × color matrix */
+      colors: z
+        .array(
+          z.object({
+            name: z.string().min(1),
+            hex: z.string().optional(),
+            stockOnHand: z.number().int().min(0).default(0),
+          }),
+        )
+        .optional(),
     }),
   ),
   asyncHandler(async (req, res) => {
     const slug = req.body.slug || slugify(req.body.title);
+    const { colors, ...productBody } = req.body;
     const product = await Product.create({
-      ...req.body,
+      ...productBody,
       slug,
       publishedAt: req.body.status === 'active' ? new Date() : undefined,
     });
+
+    const modelIds: string[] = req.body.compatibleDeviceModelIds || [];
+    const colorList = colors || [];
+    const createdVariants = [];
+
+    if (modelIds.length && colorList.length) {
+      for (const modelId of modelIds) {
+        const model = await DeviceModel.findById(modelId).select('name slug');
+        for (const color of colorList) {
+          const sku = `SE-${slugify(product.slug).slice(0, 12)}-${slugify(model?.slug || modelId).slice(0, 16)}-${slugify(color.name).slice(0, 10)}`
+            .toUpperCase()
+            .replace(/[^A-Z0-9-]/g, '')
+            .slice(0, 48);
+          createdVariants.push(
+            await ProductVariant.create({
+              productId: product._id,
+              sku,
+              deviceModelId: modelId,
+              color: color.name,
+              colorHex: color.hex || '#CCCCCC',
+              priceMinor: product.basePriceMinor,
+              compareAtPriceMinor: product.compareAtPriceMinor,
+              stockOnHand: color.stockOnHand ?? 0,
+              images: product.images || [],
+              isActive: true,
+            }),
+          );
+        }
+      }
+    }
+
     await AuditLog.create({
       actorUserId: req.user!._id,
       action: 'product.create',
       entityType: 'Product',
       entityId: String(product._id),
-      after: { title: product.title, status: product.status },
+      after: {
+        title: product.title,
+        status: product.status,
+        variantsCreated: createdVariants.length,
+      },
     });
-    ok(res, product, 201);
+    ok(res, { product, variantsCreated: createdVariants.length }, 201);
   }),
 );
 
