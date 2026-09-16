@@ -3,7 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { env } from '../../config/env.js';
 import { ok } from '../../lib/api-response.js';
 import { asyncHandler, validateBody } from '../../middleware/error.js';
-import { loadSession, requireAuth } from '../../middleware/auth.js';
+import { loadSession } from '../../middleware/auth.js';
 import {
   forgotPasswordSchema,
   login,
@@ -57,9 +57,8 @@ authRouter.post(
 authRouter.get(
   '/me',
   loadSession,
-  requireAuth,
   asyncHandler(async (req, res) => {
-    ok(res, { user: req.user });
+    ok(res, { user: req.user ?? null });
   }),
 );
 
