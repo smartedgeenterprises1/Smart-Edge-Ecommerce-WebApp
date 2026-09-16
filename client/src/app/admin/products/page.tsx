@@ -314,7 +314,7 @@ export default function AdminProductsPage() {
             <div className="space-y-2">
               {colors.map((c, i) => (
                 <div key={i} className="grid grid-cols-[1fr_5rem_5rem_auto] items-end gap-2">
-                  <Field label={i === 0 ? 'Color name' : undefined} htmlFor={`color-${i}`}>
+                  <Field label={i === 0 ? 'Color name' : ''} htmlFor={`color-${i}`}>
                     <Input
                       id={`color-${i}`}
                       placeholder="Black"
@@ -325,7 +325,7 @@ export default function AdminProductsPage() {
                       }}
                     />
                   </Field>
-                  <Field label={i === 0 ? 'Hex' : undefined} htmlFor={`hex-${i}`}>
+                  <Field label={i === 0 ? 'Hex' : ''} htmlFor={`hex-${i}`}>
                     <Input
                       id={`hex-${i}`}
                       type="color"
@@ -336,7 +336,7 @@ export default function AdminProductsPage() {
                       }}
                     />
                   </Field>
-                  <Field label={i === 0 ? 'Stock' : undefined} htmlFor={`stock-${i}`}>
+                  <Field label={i === 0 ? 'Stock' : ''} htmlFor={`stock-${i}`}>
                     <Input
                       id={`stock-${i}`}
                       type="number"
