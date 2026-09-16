@@ -7,6 +7,7 @@ import { mediaUrl } from '@/lib/config';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Select, Textarea } from '@/components/ui/field';
 import { Spinner, Badge } from '@/components/ui/misc';
+import { ImageSizeGuide, PRODUCT_IMAGE_GUIDE } from '@/components/admin/image-size-guide';
 import type { Brand, DeviceModel, ProductListItem } from '@/types';
 
 type ListResult = { items: ProductListItem[]; total: number; page: number; limit: number };
@@ -366,7 +367,8 @@ export default function AdminProductsPage() {
           </div>
 
           <div className="sm:col-span-2 space-y-2">
-            <p className="text-sm font-semibold text-primary-ink">Cover image</p>
+            <p className="text-sm font-semibold text-primary-ink">Cover / product image</p>
+            <ImageSizeGuide title="Recommended image size" items={[...PRODUCT_IMAGE_GUIDE]} />
             <div className="flex flex-wrap items-center gap-3">
               <label className="btn btn-secondary cursor-pointer">
                 {uploading ? 'Uploading…' : 'Upload image'}

@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { api } from '@/lib/api';
 import { fromMinor, toMinor } from '@/lib/format';
 import { mediaUrl } from '@/lib/config';
+import { ImageSizeGuide, HERO_IMAGE_GUIDE } from '@/components/admin/image-size-guide';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Textarea } from '@/components/ui/field';
 import { Spinner } from '@/components/ui/misc';
@@ -112,9 +113,7 @@ export default function AdminSettingsPage() {
       <form onSubmit={onSubmit} className="grid max-w-3xl gap-4 rounded-2xl border border-border bg-white p-5 sm:grid-cols-2">
         <div className="sm:col-span-2 space-y-3 rounded-xl border border-border bg-primary-soft/30 p-4">
           <h2 className="font-semibold text-primary-ink">Homepage hero image</h2>
-          <p className="text-sm text-muted">
-            Wide banner best hai (~1920×800). Full width fill hogi; thora top/bottom crop ho sakta hai.
-          </p>
+          <ImageSizeGuide title="Recommended banner size" items={[...HERO_IMAGE_GUIDE]} />
           {preview ? (
             <div className="relative h-48 w-full overflow-hidden rounded-lg border border-border bg-[#071018] sm:h-56">
               <Image src={preview} alt="Hero preview" fill className="object-cover object-center" unoptimized />
