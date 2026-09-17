@@ -201,7 +201,7 @@ export function CheckoutForm() {
         <h2 className="font-display text-xl font-bold">Shipping (Pakistan)</h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <Field label="Street address" htmlFor="street">
+            <Field label="Address" htmlFor="street">
               <Input id="street" required value={form.street} onChange={(e) => set('street', e.target.value)} />
             </Field>
           </div>
@@ -210,9 +210,6 @@ export function CheckoutForm() {
           </Field>
           <Field label="Province" htmlFor="province">
             <Input id="province" required value={form.province} onChange={(e) => set('province', e.target.value)} />
-          </Field>
-          <Field label="Postal code" htmlFor="postalCode">
-            <Input id="postalCode" value={form.postalCode} onChange={(e) => set('postalCode', e.target.value)} />
           </Field>
           <div className="sm:col-span-2">
             <Field label="Order notes" htmlFor="notes">

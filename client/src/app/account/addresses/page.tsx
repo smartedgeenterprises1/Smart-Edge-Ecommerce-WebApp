@@ -61,7 +61,7 @@ export default function AddressesPage() {
               <p className="mt-1 text-muted">
                 {a.fullName} · {a.phone}
                 <br />
-                {a.street}, {a.city}, {a.province} {a.postalCode}
+                {a.street}, {a.city}, {a.province}
               </p>
               <Button
                 variant="ghost"
@@ -78,12 +78,19 @@ export default function AddressesPage() {
       <form onSubmit={onSubmit} className="space-y-3 rounded-2xl border border-border bg-white p-5">
         <h2 className="font-semibold">Add address</h2>
         {(
-          ['label', 'fullName', 'phone', 'street', 'city', 'province', 'postalCode'] as const
-        ).map((key) => (
-          <Field key={key} label={key} htmlFor={key}>
+          [
+            ['label', 'Label'],
+            ['fullName', 'Full name'],
+            ['phone', 'Phone'],
+            ['street', 'Address'],
+            ['city', 'City'],
+            ['province', 'Province'],
+          ] as const
+        ).map(([key, label]) => (
+          <Field key={key} label={label} htmlFor={key}>
             <Input
               id={key}
-              required={key !== 'label' && key !== 'postalCode'}
+              required={key !== 'label'}
               value={form[key] as string}
               onChange={(e) => setForm({ ...form, [key]: e.target.value })}
             />
