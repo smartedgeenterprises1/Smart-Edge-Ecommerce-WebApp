@@ -305,28 +305,23 @@ export function Header({ announcement: _announcement }: { announcement?: string;
       {/* Mobile drawer */}
       {mobileOpen ? (
         <div
-          className="fixed inset-0 top-[57px] z-40 bg-white md:hidden"
+          className="fixed inset-0 top-0 z-40 bg-white md:hidden"
           role="dialog"
           aria-modal="true"
           aria-label="Mobile menu"
         >
-          <div className="container-se flex h-full flex-col gap-5 overflow-y-auto py-5 pb-24">
-            <form onSubmit={onSearch} className="flex gap-2" role="search">
-              <label htmlFor="mobile-search" className="sr-only">
-                Search products
-              </label>
-              <input
-                id="mobile-search"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Search Model i.e 14 Pro Max…"
-                className="input"
-              />
-              <button type="submit" className="btn btn-primary shrink-0 px-4">
-                Search
-              </button>
-            </form>
-
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <p className="font-display text-base font-bold text-primary-ink">Menu</p>
+            <button
+              type="button"
+              className="inline-flex size-10 items-center justify-center rounded-full text-foreground hover:bg-muted-bg"
+              aria-label="Close menu"
+              onClick={() => setMobileOpen(false)}
+            >
+              <X size={22} />
+            </button>
+          </div>
+          <div className="container-se flex h-[calc(100%-3.5rem)] flex-col gap-2 overflow-y-auto py-4 pb-24">
             <nav className="flex flex-col" aria-label="Mobile">
               <Link
                 href="/"
