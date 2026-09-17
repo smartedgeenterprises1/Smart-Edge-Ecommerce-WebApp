@@ -25,6 +25,29 @@ function resolvePublicApiUrl(): string | undefined {
 
 process.env.PUBLIC_API_URL = resolvePublicApiUrl();
 
+/** Normalize CLIENT_ORIGIN so host-only or quoted Railway values still work. */
+function normalizeClientOrigin(raw?: string): string | undefined {
+  if (!raw?.trim()) return undefined;
+  const cleaned = raw
+    .trim()
+    .replace(/^['"]|['"]$/g, '')
+    .replace(/[;\n\r]+/g, ',');
+
+  const parts = cleaned
+    .split(',')
+    .map((part) => part.trim().replace(/^['"]|['"]$/g, ''))
+    .filter(Boolean)
+    .map((part) => {
+      let url = part.replace(/\/$/, '');
+      if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+      return url;
+    });
+
+  return parts.length ? parts.join(',') : undefined;
+}
+
+process.env.CLIENT_ORIGIN = normalizeClientOrigin(process.env.CLIENT_ORIGIN) || process.env.CLIENT_ORIGIN;
+
 const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
