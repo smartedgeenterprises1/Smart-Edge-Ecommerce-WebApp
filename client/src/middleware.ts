@@ -8,29 +8,44 @@ function isLocalHost(host: string): boolean {
   return host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local');
 }
 
+function apexOf(host: string): string {
+  return host.replace(/^www\./, '').replace(/^admin\./, '');
+}
+
 export function middleware(req: NextRequest) {
   const host = hostOnly(req.headers.get('host'));
-  const adminHost = hostOnly(process.env.NEXT_PUBLIC_ADMIN_HOST || null);
-  const storeHost = hostOnly(process.env.NEXT_PUBLIC_STORE_HOST || null);
   const { pathname } = req.nextUrl;
 
-  // Local / preview without custom hosts: keep single-domain behavior.
-  if (!adminHost || !storeHost || isLocalHost(host)) {
+  // Local / default vercel.app preview: keep single-domain behavior.
+  if (isLocalHost(host) || host.endsWith('.vercel.app')) {
     return NextResponse.next();
   }
 
-  const isAdmin = host === adminHost;
-  const apex = storeHost.replace(/^www\./, '');
-  const isStore = host === storeHost || host === apex || host === `www.${apex}`;
+  const configuredAdmin = hostOnly(process.env.NEXT_PUBLIC_ADMIN_HOST || null);
+  const configuredStore = hostOnly(process.env.NEXT_PUBLIC_STORE_HOST || null);
 
-  // admin.smartedge.com → admin app only
+  const apex = apexOf(configuredStore || configuredAdmin || host);
+  const adminHost = configuredAdmin || `admin.${apex}`;
+  const storeHost = configuredStore || `www.${apex}`;
+
+  // Prefer explicit env, otherwise auto-detect admin.* subdomain
+  const isAdmin = configuredAdmin ? host === configuredAdmin : host.startsWith('admin.');
+  const isStore =
+    host === storeHost || host === apex || host === `www.${apex}` || (!isAdmin && host.endsWith(apex));
+
+  // admin.smartedgeenterprises.com → admin app only
   if (isAdmin) {
     const allowedAuth =
       pathname.startsWith('/login') ||
       pathname.startsWith('/forgot-password') ||
       pathname.startsWith('/reset-password');
 
-    if (allowedAuth || pathname.startsWith('/admin') || pathname.startsWith('/_next') || pathname === '/favicon.ico') {
+    if (
+      allowedAuth ||
+      pathname.startsWith('/admin') ||
+      pathname.startsWith('/_next') ||
+      pathname === '/favicon.ico'
+    ) {
       if (pathname === '/') {
         const url = req.nextUrl.clone();
         url.pathname = '/admin';
