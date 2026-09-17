@@ -256,16 +256,20 @@ a {
   align-items: center;
   justify-content: center;
   min-height: 2.5rem;
-  padding: 0.55rem 1rem;
+  max-width: 100%;
+  padding: 0.55rem 0.75rem;
   overflow: hidden;
   text-align: center;
 }
 
 .announcement-glow {
   margin: 0;
-  max-width: 56rem;
+  max-width: 100%;
   min-height: 1.35em;
-  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.72rem;
   font-weight: 600;
   line-height: 1.35;
   color: #e8f7ff;

@@ -142,7 +142,7 @@ export function Header({ announcement: _announcement }: { announcement?: string;
 
       {/* Row 1: logo · search · icons */}
       <div className="border-b border-border/70">
-        <div className="flex w-full items-center gap-1 py-3 pl-0 pr-2 md:gap-3 md:py-4 md:pr-4">
+        <div className="flex w-full min-w-0 items-center gap-1 overflow-hidden py-3 pl-0 pr-2 md:gap-3 md:py-4 md:pr-4">
           <button
             type="button"
             className="hidden size-10 shrink-0 items-center justify-center rounded-full text-foreground max-md:inline-flex max-md:pl-2"
@@ -155,7 +155,7 @@ export function Header({ announcement: _announcement }: { announcement?: string;
 
           <Link
             href="/"
-            className="flex shrink-0 items-center gap-1.5 pl-2 sm:gap-2 sm:pl-3 md:pl-4"
+            className="flex min-w-0 flex-1 items-center gap-1.5 pl-2 sm:gap-2 sm:pl-3 md:flex-none md:pl-4"
             aria-label="SMART EDGE ENTERPRISE home"
           >
             <Image
@@ -163,11 +163,12 @@ export function Header({ announcement: _announcement }: { announcement?: string;
               alt="SMART EDGE ENTERPRISE"
               width={44}
               height={44}
-              className="size-10 object-contain sm:size-11"
+              className="size-9 shrink-0 object-contain sm:size-11"
               priority
             />
-            <span className="font-display text-lg font-bold tracking-tight text-primary-ink sm:text-xl">
-              SMART EDGE ENTERPRISE
+            <span className="min-w-0 truncate font-display text-base font-bold tracking-tight text-primary-ink sm:text-xl">
+              <span className="sm:hidden">SMART EDGE</span>
+              <span className="hidden sm:inline">SMART EDGE ENTERPRISE</span>
             </span>
           </Link>
 
@@ -202,7 +203,7 @@ export function Header({ announcement: _announcement }: { announcement?: string;
             </div>
           </form>
 
-          <div className="ml-auto flex items-center gap-0.5 sm:gap-1 md:ml-0">
+          <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1 md:ml-0">
             <Link
               href={user ? '/account' : '/login'}
               className="btn btn-ghost p-2.5"

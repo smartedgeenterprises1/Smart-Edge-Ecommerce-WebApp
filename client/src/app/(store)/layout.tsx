@@ -11,14 +11,14 @@ export const metadata: Metadata = {
 export default async function StoreLayout({ children }: { children: React.ReactNode }) {
   const settings = await serverApiSoft<StoreSettings>('/api/settings');
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="flex min-h-dvh max-w-[100vw] flex-col overflow-x-hidden">
       <Header
         announcement={
           settings?.announcement ||
           'Welcome to SMART EDGE ENTERPRISE, Buy covers for IPhone, Google Pixel, and Samsung Phones. Free Delivery on Orders Above 2499 Rs'
         }
       />
-      <main className="flex-1">{children}</main>
+      <main className="min-w-0 flex-1 overflow-x-hidden">{children}</main>
       <Footer settings={settings} />
     </div>
   );

@@ -21,8 +21,8 @@ export const metadata: Metadata = buildMetadata({});
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en-PK">
-      <body className={`${outfit.variable} ${sora.variable} font-sans antialiased`}>
+    <html lang="en-PK" className="overflow-x-hidden">
+      <body className={`${outfit.variable} ${sora.variable} overflow-x-hidden font-sans antialiased`}>
         <AuthProvider>
           <CartProvider>{children}</CartProvider>
         </AuthProvider>
