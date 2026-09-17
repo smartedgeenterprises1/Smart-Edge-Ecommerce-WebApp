@@ -81,10 +81,11 @@ export default async function HomePage() {
               <Link
                 key={slug}
                 href={`/shop?brand=${slug}`}
-                className={`animate-fade-up flex min-h-[7.5rem] items-center justify-center rounded-2xl border border-border bg-white px-6 py-8 shadow-sm transition hover:-translate-y-0.5 hover:border-primary hover:shadow-md animate-delay-${(i % 3) + 1}`}
+                className={`animate-fade-up flex min-h-[7.5rem] flex-col items-center justify-center gap-3 rounded-2xl border border-border bg-white px-6 py-8 shadow-sm transition hover:-translate-y-0.5 hover:border-primary hover:shadow-md animate-delay-${(i % 3) + 1}`}
                 aria-label={`Shop all ${name} covers`}
               >
                 <BrandLogo slug={slug} name={name} logoUrl={fromApi?.logoUrl} />
+                <span className="font-display text-base font-semibold text-primary-ink sm:text-lg">{name}</span>
               </Link>
             );
           })}
