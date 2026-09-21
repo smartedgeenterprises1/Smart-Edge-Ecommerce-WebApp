@@ -6,6 +6,8 @@ import { formatDate, formatPkr } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/field';
 import { Spinner, Badge } from '@/components/ui/misc';
+import { WhatsAppOrderCard } from '@/components/admin/whatsapp-order-card';
+import { fulfillmentLabel } from '@/lib/whatsapp';
 import type { Order } from '@/types';
 
 type ListResult = { items: Order[]; total: number; page: number; limit: number };
@@ -44,6 +46,7 @@ export default function AdminOrdersPage() {
     setSelected(order);
     setTrackingNumber(order.trackingNumber || '');
     setTrackingCarrier(order.trackingCarrier || '');
+    setMsg('');
   }
 
   async function setFulfillment(status: (typeof fulfillmentOptions)[number]) {
@@ -55,10 +58,37 @@ export default function AdminOrdersPage() {
         body: JSON.stringify({ status, trackingNumber, trackingCarrier }),
       });
       setSelected(order);
-      setMsg(`Fulfillment → ${status}`);
+      setTrackingNumber(order.trackingNumber || '');
+      setTrackingCarrier(order.trackingCarrier || '');
+      const waReady = ['confirmed', 'processing', 'shipped', 'delivered', 'cancelled'].includes(status);
+      setMsg(
+        waReady
+          ? `Status → ${fulfillmentLabel(status)}. WhatsApp message is ready below.`
+          : `Fulfillment → ${status}`,
+      );
       await load(data?.page || 1);
     } catch (e) {
       setMsg(e instanceof Error ? e.message : 'Update failed');
+    }
+  }
+
+  async function saveTracking() {
+    if (!selected) return;
+    setMsg('');
+    try {
+      const order = await api<Order>(`/api/admin/orders/${selected._id}/tracking`, {
+        method: 'POST',
+        body: JSON.stringify({ trackingNumber, trackingCarrier }),
+      });
+      setSelected(order);
+      setMsg(
+        order.fulfillmentStatus === 'shipped' || order.fulfillmentStatus === 'delivered'
+          ? 'Tracking saved. WhatsApp message below includes the tracking number.'
+          : 'Tracking saved. It will be included when you mark the order shipped.',
+      );
+      await load(data?.page || 1);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : 'Could not save tracking');
     }
   }
 
@@ -81,7 +111,7 @@ export default function AdminOrdersPage() {
     try {
       const order = await api<Order>(`/api/admin/orders/${selected._id}/cancel`, { method: 'POST' });
       setSelected(order);
-      setMsg('Order cancelled');
+      setMsg('Order cancelled. WhatsApp message is ready below.');
       await load(data?.page || 1);
     } catch (e) {
       setMsg(e instanceof Error ? e.message : 'Cancel failed');
@@ -162,7 +192,7 @@ export default function AdminOrdersPage() {
 
         <aside className="h-fit rounded-2xl border border-border bg-white p-4">
           {!selected ? (
-            <p className="text-sm text-muted">Select an order to manage fulfillment and COD.</p>
+            <p className="text-sm text-muted">Select an order to manage fulfillment, tracking, and WhatsApp.</p>
           ) : (
             <div className="space-y-4">
               <div>
@@ -173,6 +203,9 @@ export default function AdminOrdersPage() {
                 {selected.customerPhone ? (
                   <p className="text-sm text-muted">{selected.customerPhone}</p>
                 ) : null}
+                <p className="mt-1 text-sm capitalize text-muted">
+                  Status: <strong className="text-primary-ink">{fulfillmentLabel(selected.fulfillmentStatus)}</strong>
+                </p>
                 <p className="text-sm font-semibold">{formatPkr(selected.totalMinor)}</p>
               </div>
               {selected.shippingAddress ? (
@@ -224,6 +257,7 @@ export default function AdminOrdersPage() {
                   id="trackingNumber"
                   value={trackingNumber}
                   onChange={(e) => setTrackingNumber(e.target.value)}
+                  placeholder="e.g. TCS123456"
                 />
                 <label className="label" htmlFor="trackingCarrier">
                   Carrier
@@ -232,7 +266,11 @@ export default function AdminOrdersPage() {
                   id="trackingCarrier"
                   value={trackingCarrier}
                   onChange={(e) => setTrackingCarrier(e.target.value)}
+                  placeholder="e.g. TCS, Leopards"
                 />
+                <Button type="button" variant="secondary" size="sm" onClick={() => void saveTracking()}>
+                  Save tracking
+                </Button>
               </div>
               <div className="flex flex-wrap gap-2">
                 {fulfillmentOptions.map((s) => (
@@ -250,6 +288,7 @@ export default function AdminOrdersPage() {
                 </Button>
               </div>
               {msg ? <p className="text-sm text-primary-ink">{msg}</p> : null}
+              <WhatsAppOrderCard order={{ ...selected, trackingNumber, trackingCarrier }} />
             </div>
           )}
         </aside>
