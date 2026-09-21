@@ -122,7 +122,10 @@ adminRouter.post(
       compatibleDeviceModelIds: z.array(z.string()).optional(),
       caseType: z.string().optional(),
       material: z.string().optional(),
-      images: z.array(z.object({ url: z.string(), alt: z.string().optional(), sortOrder: z.number().optional() })).optional(),
+      images: z
+        .array(z.object({ url: z.string(), alt: z.string().optional(), sortOrder: z.number().optional() }))
+        .max(15)
+        .optional(),
       status: z.enum(['draft', 'active', 'archived']).optional(),
       isFeatured: z.boolean().optional(),
       isNewArrival: z.boolean().optional(),
@@ -139,20 +142,23 @@ adminRouter.post(
             stockOnHand: z.number().int().min(0).default(0),
           }),
         )
+        .max(10)
         .optional(),
     }),
   ),
   asyncHandler(async (req, res) => {
     const slug = req.body.slug || slugify(req.body.title);
     const { colors, ...productBody } = req.body;
+    const productImages = (req.body.images || []).slice(0, 15);
     const product = await Product.create({
       ...productBody,
+      images: productImages,
       slug,
       publishedAt: req.body.status === 'active' ? new Date() : undefined,
     });
 
     const modelIds: string[] = req.body.compatibleDeviceModelIds || [];
-    const colorList = colors || [];
+    const colorList = (colors || []).slice(0, 10);
     const createdVariants = [];
 
     if (modelIds.length && colorList.length) {
