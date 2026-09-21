@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Outfit, Sora } from 'next/font/google';
 import { AuthProvider } from '@/context/auth-context';
 import { CartProvider } from '@/context/cart-context';
+import { ToastProvider } from '@/context/toast-context';
 import { buildMetadata } from '@/lib/seo';
 import './globals.css';
 
@@ -24,7 +25,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en-PK" className="overflow-x-hidden">
       <body className={`${outfit.variable} ${sora.variable} overflow-x-hidden font-sans antialiased`}>
         <AuthProvider>
-          <CartProvider>{children}</CartProvider>
+          <CartProvider>
+            <ToastProvider>{children}</ToastProvider>
+          </CartProvider>
         </AuthProvider>
       </body>
     </html>
