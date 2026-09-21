@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { readGuestOrder } from '@/lib/cart';
 import { formatPkr, formatDate } from '@/lib/format';
 import { Spinner } from '@/components/ui/misc';
+import { OrderStatusPanel } from '@/components/features/order-status';
 import type { Order } from '@/types';
 import { useAuth } from '@/context/auth-context';
 
@@ -88,32 +89,37 @@ export function OrderConfirmation({
   }
 
   return (
-    <div className="mx-auto max-w-2xl rounded-3xl border border-border bg-white p-6 shadow-sm sm:p-8">
-      <p className="text-sm font-semibold uppercase tracking-wide text-success">Thank you</p>
-      <h1 className="mt-2 font-display text-3xl font-bold text-primary-ink">Order confirmed</h1>
-      <p className="mt-2 text-muted">
-        Your order <strong>{order?.orderNumber}</strong> is placed with Cash on Delivery.
-      </p>
-      {order?.createdAt ? <p className="mt-1 text-sm text-muted">{formatDate(order.createdAt)}</p> : null}
-      {order?.items?.length ? (
-        <ul className="mt-6 space-y-3 border-t border-border pt-4">
-          {order.items.map((item, i) => (
-            <li key={i} className="flex justify-between gap-4 text-sm">
-              <span>
-                {item.title} × {item.quantity}
-              </span>
-              <span className="font-medium">{formatPkr(item.lineTotalMinor)}</span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {order?.totalMinor ? (
-        <div className="mt-4 flex justify-between border-t border-border pt-4 text-lg font-bold">
-          <span>Total</span>
-          <span>{formatPkr(order.totalMinor)}</span>
-        </div>
-      ) : null}
-      <div className="mt-8 flex flex-wrap gap-3">
+    <div className="mx-auto max-w-2xl space-y-6">
+      <div className="rounded-3xl border border-border bg-white p-6 shadow-sm sm:p-8">
+        <p className="text-sm font-semibold uppercase tracking-wide text-success">Thank you</p>
+        <h1 className="mt-2 font-display text-3xl font-bold text-primary-ink">Order placed</h1>
+        <p className="mt-2 text-muted">
+          Your order <strong>{order?.orderNumber}</strong> is placed with Cash on Delivery.
+        </p>
+        {order?.createdAt ? <p className="mt-1 text-sm text-muted">{formatDate(order.createdAt)}</p> : null}
+        {order?.items?.length ? (
+          <ul className="mt-6 space-y-3 border-t border-border pt-4">
+            {order.items.map((item, i) => (
+              <li key={i} className="flex justify-between gap-4 text-sm">
+                <span>
+                  {item.title} × {item.quantity}
+                </span>
+                <span className="font-medium">{formatPkr(item.lineTotalMinor)}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {order?.totalMinor ? (
+          <div className="mt-4 flex justify-between border-t border-border pt-4 text-lg font-bold">
+            <span>Total</span>
+            <span>{formatPkr(order.totalMinor)}</span>
+          </div>
+        ) : null}
+      </div>
+
+      {order?._id ? <OrderStatusPanel order={order} /> : null}
+
+      <div className="flex flex-wrap gap-3">
         <Link href="/shop" className="btn btn-primary">
           Continue shopping
         </Link>

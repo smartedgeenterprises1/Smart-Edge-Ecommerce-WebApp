@@ -1,26 +1,40 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { formatDate, formatPkr } from '@/lib/format';
+import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/misc';
+import { OrderStatusPanel } from '@/components/features/order-status';
 import type { Order } from '@/types';
 
 export default function OrderDetailPage() {
   const { orderNumber } = useParams<{ orderNumber: string }>();
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!orderNumber) return;
-    void api<Order>(`/api/orders/mine/${encodeURIComponent(orderNumber)}`)
-      .then(setOrder)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Order not found'));
+    setRefreshing(true);
+    try {
+      const data = await api<Order>(`/api/orders/mine/${encodeURIComponent(orderNumber)}`);
+      setOrder(data);
+      setError('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Order not found');
+    } finally {
+      setRefreshing(false);
+    }
   }, [orderNumber]);
 
-  if (error) {
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  if (error && !order) {
     return (
       <div>
         <p className="text-danger">{error}</p>
@@ -35,16 +49,21 @@ export default function OrderDetailPage() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <div>
-        <Link href="/account/orders" className="text-sm text-muted hover:text-primary-ink">
-          ← Orders
-        </Link>
-        <h1 className="mt-2 font-display text-2xl font-bold text-primary-ink">{order.orderNumber}</h1>
-        <p className="text-sm text-muted">{formatDate(order.createdAt)}</p>
-        <p className="mt-1 text-sm capitalize text-muted">
-          {order.fulfillmentStatus} · {order.paymentStatus}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <Link href="/account/orders" className="text-sm text-muted hover:text-primary-ink">
+            ← Orders
+          </Link>
+          <h1 className="mt-2 font-display text-2xl font-bold text-primary-ink">{order.orderNumber}</h1>
+          <p className="text-sm text-muted">{formatDate(order.createdAt)}</p>
+        </div>
+        <Button variant="secondary" size="sm" onClick={() => void load()} disabled={refreshing}>
+          {refreshing ? 'Refreshing…' : 'Refresh status'}
+        </Button>
       </div>
+
+      <OrderStatusPanel order={order} />
+
       <ul className="space-y-3 rounded-2xl border border-border bg-white p-4">
         {order.items.map((i, idx) => (
           <li key={idx} className="flex justify-between gap-3 border-b border-border py-2 text-sm last:border-0">

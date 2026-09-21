@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { formatDate, formatPkr } from '@/lib/format';
-import { Spinner, EmptyState } from '@/components/ui/misc';
+import { Spinner, EmptyState, Badge } from '@/components/ui/misc';
+import { fulfillmentLabel } from '@/lib/whatsapp';
 import type { Order } from '@/types';
 
 export default function AccountOrdersPage() {
@@ -46,12 +47,16 @@ export default function AccountOrdersPage() {
             <div>
               <p className="font-semibold">{o.orderNumber}</p>
               <p className="text-sm text-muted">{formatDate(o.createdAt)}</p>
+              {o.trackingNumber ? (
+                <p className="mt-1 text-xs text-primary-ink">Tracking: {o.trackingNumber}</p>
+              ) : null}
             </div>
             <div className="text-right">
               <p className="font-semibold">{formatPkr(o.totalMinor)}</p>
-              <p className="text-xs capitalize text-muted">
-                {o.fulfillmentStatus} · {o.paymentStatus}
-              </p>
+              <div className="mt-1 flex flex-wrap justify-end gap-1">
+                <Badge>{fulfillmentLabel(o.fulfillmentStatus)}</Badge>
+              </div>
+              <p className="mt-1 text-xs capitalize text-muted">{o.paymentStatus}</p>
             </div>
           </div>
         </Link>
