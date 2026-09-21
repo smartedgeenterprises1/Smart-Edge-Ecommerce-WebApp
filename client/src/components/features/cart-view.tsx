@@ -6,6 +6,7 @@ import { Trash2 } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/field';
+import { QuantityStepper } from '@/components/ui/quantity-stepper';
 import { EmptyState, Spinner } from '@/components/ui/misc';
 import { formatPkr } from '@/lib/format';
 import { mediaUrl } from '@/lib/config';
@@ -54,14 +55,12 @@ export function CartView() {
                 <label htmlFor={`qty-${item.variantId}`} className="sr-only">
                   Quantity for {item.title}
                 </label>
-                <input
+                <QuantityStepper
                   id={`qty-${item.variantId}`}
-                  type="number"
+                  value={item.quantity}
                   min={1}
                   max={Math.max(1, item.available)}
-                  value={item.quantity}
-                  className="input w-20"
-                  onChange={(e) => setQuantity(item.variantId, Number(e.target.value) || 1)}
+                  onChange={(n) => setQuantity(item.variantId, n)}
                 />
                 <button
                   type="button"
