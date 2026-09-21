@@ -5,8 +5,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { QuantityStepper } from '@/components/ui/quantity-stepper';
 import { useCart } from '@/context/cart-context';
 import { useAuth } from '@/context/auth-context';
+import { useToast } from '@/context/toast-context';
 import { api } from '@/lib/api';
 import { formatPkr } from '@/lib/format';
 import { mediaUrl } from '@/lib/config';
@@ -90,6 +92,7 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
   }, [deviceKey, color]);
 
   const { addItem } = useCart();
+  const { toast } = useToast();
   const { user } = useAuth();
   const [qty, setQty] = useState(1);
   const [msg, setMsg] = useState('');
@@ -98,11 +101,19 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
 
   const stock = selected ? available(selected) : 0;
   const canBuy = Boolean(selected) && stock > 0;
+  const maxQty = Math.max(1, Math.min(20, stock || 1));
+
+  useEffect(() => {
+    setQty((q) => Math.min(q, maxQty));
+  }, [maxQty]);
 
   function onModelChange(nextKey: string) {
     setDeviceKey(nextKey);
     const nextColors = variants.filter((v) => (modelId(v) || 'universal') === nextKey);
-    const preferred = nextColors.find((v) => v.color === color && available(v) > 0) || nextColors.find((v) => available(v) > 0) || nextColors[0];
+    const preferred =
+      nextColors.find((v) => v.color === color && available(v) > 0) ||
+      nextColors.find((v) => available(v) > 0) ||
+      nextColors[0];
     setColor(preferred?.color || '');
   }
 
@@ -112,8 +123,9 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
 
   function add(buyNow = false) {
     if (!selected) return;
-    addItem(selected._id, qty);
-    setMsg('Added to cart');
+    addItem(selected._id, Math.min(qty, maxQty));
+    toast('Product added to cart');
+    setMsg('');
     if (buyNow) router.push('/checkout');
   }
 
@@ -241,15 +253,13 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
           <label htmlFor="qty" className="sr-only">
             Quantity
           </label>
-          <input
+          <QuantityStepper
             id="qty"
-            type="number"
+            value={Math.min(qty, maxQty)}
             min={1}
-            max={Math.max(1, Math.min(20, stock || 1))}
-            value={qty}
-            onChange={(e) => setQty(Number(e.target.value) || 1)}
-            className="input w-24"
+            max={maxQty}
             disabled={!canBuy}
+            onChange={setQty}
           />
           <Button onClick={() => add(false)} disabled={!canBuy}>
             Add to cart
