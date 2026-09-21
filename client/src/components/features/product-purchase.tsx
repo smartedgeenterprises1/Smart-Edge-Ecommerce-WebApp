@@ -71,18 +71,24 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
   }, [variants, color, deviceKey]);
 
   const images = useMemo(() => {
-    const fromVariant = selected?.images?.length ? selected.images : [];
+    const colorVariants = variants.filter((v) => v.color === color);
+    const fromColor = colorVariants.flatMap((v) => v.images || []);
+    const fromSelected = selected?.images?.length ? selected.images : [];
     const fromProduct = product.images || [];
-    const merged = [...fromVariant, ...fromProduct];
+    const merged = [...fromSelected, ...fromColor, ...fromProduct];
     const seen = new Set<string>();
     return merged.filter((img) => {
       if (!img?.url || seen.has(img.url)) return false;
       seen.add(img.url);
       return true;
     });
-  }, [selected, product.images]);
+  }, [variants, color, selected, product.images]);
 
   const [activeImg, setActiveImg] = useState(0);
+  useEffect(() => {
+    setActiveImg(0);
+  }, [deviceKey, color]);
+
   const { addItem } = useCart();
   const { user } = useAuth();
   const [qty, setQty] = useState(1);
@@ -96,17 +102,12 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
   function onModelChange(nextKey: string) {
     setDeviceKey(nextKey);
     const nextColors = variants.filter((v) => (modelId(v) || 'universal') === nextKey);
-    const preferred =
-      nextColors.find((v) => v.color === color && available(v) > 0) ||
-      nextColors.find((v) => available(v) > 0) ||
-      nextColors[0];
+    const preferred = nextColors.find((v) => v.color === color && available(v) > 0) || nextColors.find((v) => available(v) > 0) || nextColors[0];
     setColor(preferred?.color || '');
-    setActiveImg(0);
   }
 
   function onColor(c: string) {
     setColor(c);
-    setActiveImg(0);
   }
 
   function add(buyNow = false) {
