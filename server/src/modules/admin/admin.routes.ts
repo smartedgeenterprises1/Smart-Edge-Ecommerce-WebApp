@@ -140,6 +140,7 @@ adminRouter.post(
             name: z.string().min(1),
             hex: z.string().optional(),
             stockOnHand: z.number().int().min(0).default(0),
+            imageUrl: z.string().min(1).optional(),
           }),
         )
         .max(10)
@@ -169,6 +170,9 @@ adminRouter.post(
             .toUpperCase()
             .replace(/[^A-Z0-9-]/g, '')
             .slice(0, 48);
+          const colorImages = color.imageUrl
+            ? [{ url: color.imageUrl, alt: `${product.title} — ${color.name}`, sortOrder: 0 }]
+            : product.images || [];
           createdVariants.push(
             await ProductVariant.create({
               productId: product._id,
@@ -179,7 +183,7 @@ adminRouter.post(
               priceMinor: product.basePriceMinor,
               compareAtPriceMinor: product.compareAtPriceMinor,
               stockOnHand: color.stockOnHand ?? 0,
-              images: product.images || [],
+              images: colorImages,
               isActive: true,
             }),
           );
