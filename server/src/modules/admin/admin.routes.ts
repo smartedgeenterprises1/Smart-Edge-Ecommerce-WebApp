@@ -19,6 +19,7 @@ import {
   cancelOrder,
   markPaymentCollected,
   updateFulfillmentStatus,
+  updateOrderTracking,
 } from '../orders/order.service.js';
 import { slugify, toMinor } from '../../lib/utils.js';
 
@@ -374,6 +375,30 @@ adminRouter.post(
       entityType: 'Order',
       entityId: String(order._id),
       after: { status: req.body.status },
+    });
+    ok(res, order);
+  }),
+);
+
+adminRouter.post(
+  '/orders/:id/tracking',
+  validateBody(
+    z.object({
+      trackingNumber: z.string().optional(),
+      trackingCarrier: z.string().optional(),
+    }),
+  ),
+  asyncHandler(async (req, res) => {
+    const order = await updateOrderTracking(String(req.params.id), req.body, String(req.user!._id));
+    await AuditLog.create({
+      actorUserId: req.user!._id,
+      action: 'order.tracking',
+      entityType: 'Order',
+      entityId: String(order._id),
+      after: {
+        trackingNumber: order.trackingNumber,
+        trackingCarrier: order.trackingCarrier,
+      },
     });
     ok(res, order);
   }),

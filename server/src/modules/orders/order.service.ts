@@ -361,12 +361,37 @@ export async function updateFulfillmentStatus(
   order.fulfillmentStatus = nextStatus as typeof order.fulfillmentStatus;
   if (nextStatus === 'shipped') {
     order.shippedAt = new Date();
-    if (tracking?.trackingNumber) order.trackingNumber = tracking.trackingNumber;
-    if (tracking?.trackingCarrier) order.trackingCarrier = tracking.trackingCarrier;
+  }
+  if (tracking?.trackingNumber !== undefined) {
+    order.trackingNumber = tracking.trackingNumber;
+  }
+  if (tracking?.trackingCarrier !== undefined) {
+    order.trackingCarrier = tracking.trackingCarrier;
   }
   if (nextStatus === 'delivered') order.deliveredAt = new Date();
   order.internalNotes.push({
     message: `Fulfillment → ${nextStatus}`,
+    at: new Date(),
+    by: new mongoose.Types.ObjectId(actorUserId),
+  });
+  await order.save();
+  return order;
+}
+
+export async function updateOrderTracking(
+  orderId: string,
+  tracking: { trackingNumber?: string; trackingCarrier?: string },
+  actorUserId: string,
+) {
+  const order = await Order.findById(orderId);
+  if (!order) throw new AppError('Order not found', 404, 'NOT_FOUND');
+  if (order.fulfillmentStatus === 'cancelled') {
+    throw new AppError('Cannot update tracking on cancelled order', 400, 'INVALID_STATE');
+  }
+  if (tracking.trackingNumber !== undefined) order.trackingNumber = tracking.trackingNumber;
+  if (tracking.trackingCarrier !== undefined) order.trackingCarrier = tracking.trackingCarrier;
+  order.internalNotes.push({
+    message: `Tracking updated${tracking.trackingNumber ? `: ${tracking.trackingNumber}` : ''}`,
     at: new Date(),
     by: new mongoose.Types.ObjectId(actorUserId),
   });
