@@ -170,13 +170,47 @@ export default function AdminOrdersPage() {
                 <p className="text-sm text-muted">
                   {selected.customerName} · {selected.customerEmail}
                 </p>
+                {selected.customerPhone ? (
+                  <p className="text-sm text-muted">{selected.customerPhone}</p>
+                ) : null}
                 <p className="text-sm font-semibold">{formatPkr(selected.totalMinor)}</p>
               </div>
+              {selected.shippingAddress ? (
+                <div className="rounded-xl border border-border bg-slate-50 p-3 text-sm">
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Ship to</p>
+                  <p className="font-medium text-primary-ink">
+                    {selected.shippingAddress.fullName || selected.customerName}
+                  </p>
+                  {selected.shippingAddress.phone ? (
+                    <p className="text-muted">{selected.shippingAddress.phone}</p>
+                  ) : null}
+                  <p className="mt-1 text-primary-ink">
+                    {selected.shippingAddress.street}
+                    <br />
+                    {selected.shippingAddress.city}
+                    {selected.shippingAddress.province ? `, ${selected.shippingAddress.province}` : ''}
+                    {selected.shippingAddress.postalCode ? ` ${selected.shippingAddress.postalCode}` : ''}
+                    {selected.shippingAddress.country ? (
+                      <>
+                        <br />
+                        {selected.shippingAddress.country}
+                      </>
+                    ) : null}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-danger">No shipping address on this order.</p>
+              )}
               <ul className="space-y-2 text-sm">
                 {selected.items?.map((item, i) => (
                   <li key={i} className="flex justify-between gap-2">
                     <span>
                       {item.title} × {item.quantity}
+                      {item.color || item.deviceModelName ? (
+                        <span className="block text-xs text-muted">
+                          {[item.deviceModelName, item.color].filter(Boolean).join(' · ')}
+                        </span>
+                      ) : null}
                     </span>
                     <span>{formatPkr(item.lineTotalMinor)}</span>
                   </li>
