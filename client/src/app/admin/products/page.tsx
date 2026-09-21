@@ -8,14 +8,18 @@ import { Button } from '@/components/ui/button';
 import { Field, Input, Select, Textarea } from '@/components/ui/field';
 import { Spinner, Badge } from '@/components/ui/misc';
 import { ImageSizeGuide, PRODUCT_IMAGE_GUIDE } from '@/components/admin/image-size-guide';
+import { cn } from '@/lib/cn';
 import type { Brand, DeviceModel, ProductListItem } from '@/types';
 
 type ListResult = { items: ProductListItem[]; total: number; page: number; limit: number };
-type ColorRow = { name: string; hex: string; stockOnHand: string };
+type ColorRow = { name: string; hex: string; stockOnHand: string; imageUrl: string };
+
+const MAX_IMAGES = 15;
+const MAX_COLORS = 10;
 
 const DEFAULT_COLORS: ColorRow[] = [
-  { name: 'Black', hex: '#111827', stockOnHand: '10' },
-  { name: 'Clear', hex: '#E5E7EB', stockOnHand: '10' },
+  { name: 'Black', hex: '#111827', stockOnHand: '10', imageUrl: '' },
+  { name: 'Clear', hex: '#E5E7EB', stockOnHand: '10', imageUrl: '' },
 ];
 
 export default function AdminProductsPage() {
@@ -32,7 +36,7 @@ export default function AdminProductsPage() {
   const [brandId, setBrandId] = useState('');
   const [selectedModelIds, setSelectedModelIds] = useState<string[]>([]);
   const [colors, setColors] = useState<ColorRow[]>(DEFAULT_COLORS);
-  const [imageUrl, setImageUrl] = useState('');
+  const [gallery, setGallery] = useState<string[]>([]);
 
   const [form, setForm] = useState({
     title: '',
@@ -96,20 +100,35 @@ export default function AdminProductsPage() {
     setSelectedModelIds([]);
   }
 
-  async function onUpload(file: File | null) {
-    if (!file) return;
+  async function onUploadFiles(fileList: FileList | null) {
+    if (!fileList?.length) return;
+    const remaining = MAX_IMAGES - gallery.length;
+    if (remaining <= 0) {
+      setMsg(`Max ${MAX_IMAGES} images allowed`);
+      return;
+    }
+    const files = Array.from(fileList).slice(0, remaining);
     setUploading(true);
     setMsg('');
     try {
-      const body = new FormData();
-      body.append('file', file);
-      const saved = await api<{ url: string }>('/api/admin/uploads', { method: 'POST', body });
-      setImageUrl(saved.url);
+      const urls: string[] = [];
+      for (const file of files) {
+        const body = new FormData();
+        body.append('file', file);
+        const saved = await api<{ url: string }>('/api/admin/uploads', { method: 'POST', body });
+        urls.push(saved.url);
+      }
+      setGallery((prev) => [...prev, ...urls].slice(0, MAX_IMAGES));
     } catch (err) {
       setMsg(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setUploading(false);
     }
+  }
+
+  function removeGalleryImage(url: string) {
+    setGallery((prev) => prev.filter((u) => u !== url));
+    setColors((prev) => prev.map((c) => (c.imageUrl === url ? { ...c, imageUrl: '' } : c)));
   }
 
   async function createProduct(e: FormEvent) {
@@ -128,10 +147,16 @@ export default function AdminProductsPage() {
         name: c.name.trim(),
         hex: c.hex.trim() || '#CCCCCC',
         stockOnHand: Math.max(0, Number(c.stockOnHand) || 0),
+        imageUrl: c.imageUrl || undefined,
       }))
-      .filter((c) => c.name);
+      .filter((c) => c.name)
+      .slice(0, MAX_COLORS);
     if (!cleanColors.length) {
       setMsg('Add at least one color');
+      return;
+    }
+    if (gallery.length > MAX_IMAGES) {
+      setMsg(`Max ${MAX_IMAGES} images`);
       return;
     }
 
@@ -150,7 +175,7 @@ export default function AdminProductsPage() {
           isNewArrival: form.isNewArrival,
           brandIds: [brandId],
           compatibleDeviceModelIds: selectedModelIds,
-          images: imageUrl ? [{ url: imageUrl, alt: form.title, sortOrder: 0 }] : [],
+          images: gallery.map((url, i) => ({ url, alt: form.title, sortOrder: i })),
           colors: cleanColors,
         }),
       });
@@ -167,7 +192,7 @@ export default function AdminProductsPage() {
       });
       setSelectedModelIds([]);
       setColors(DEFAULT_COLORS);
-      setImageUrl('');
+      setGallery([]);
       await load();
       setMsg(`Product created with ${res.variantsCreated} variants (models × colors)`);
     } catch (err) {
@@ -192,7 +217,8 @@ export default function AdminProductsPage() {
         <div>
           <h1 className="font-display text-2xl font-bold text-primary-ink">Products</h1>
           <p className="text-sm text-muted">
-            One cover design = many phone models (customer dropdown) + color variants.
+            One cover design = model dropdown first, then color swatches. Upload up to {MAX_IMAGES} photos and link one
+            per color.
           </p>
         </div>
         <div className="flex gap-2">
@@ -233,7 +259,7 @@ export default function AdminProductsPage() {
             <Field label="Description" htmlFor="description">
               <Textarea
                 id="description"
-                placeholder="Same design fits selected models — customer picks their phone + color."
+                placeholder="Customer picks phone model first, then color."
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
               />
@@ -275,7 +301,7 @@ export default function AdminProductsPage() {
 
           <div className="sm:col-span-2 space-y-2 rounded-xl border border-border bg-slate-50 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-primary-ink">Phone models (customer dropdown)</p>
+              <p className="text-sm font-semibold text-primary-ink">Phone models (customer chooses first)</p>
               <div className="flex gap-2">
                 <Button type="button" size="sm" variant="secondary" onClick={selectAllModels}>
                   Select all
@@ -300,91 +326,153 @@ export default function AdminProductsPage() {
             {!brandModels.length ? <p className="text-xs text-muted">No models for this brand yet.</p> : null}
           </div>
 
+          <div className="sm:col-span-2 space-y-3 rounded-xl border border-border bg-slate-50 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-primary-ink">
+                Cover images ({gallery.length}/{MAX_IMAGES})
+              </p>
+              <label className="btn btn-secondary cursor-pointer text-sm">
+                {uploading ? 'Uploading…' : 'Upload images'}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  multiple
+                  className="sr-only"
+                  disabled={uploading || gallery.length >= MAX_IMAGES}
+                  onChange={(e) => {
+                    void onUploadFiles(e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+            </div>
+            <ImageSizeGuide title="Recommended image size" items={[...PRODUCT_IMAGE_GUIDE]} />
+            <p className="text-xs text-muted">
+              Upload up to {MAX_IMAGES} photos, then assign one image to each color so customers can see every option.
+            </p>
+            {gallery.length ? (
+              <div className="flex flex-wrap gap-2">
+                {gallery.map((url) => (
+                  <div key={url} className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={mediaUrl(url)} alt="" className="h-20 w-20 rounded-lg border border-border object-cover" />
+                    <button
+                      type="button"
+                      className="absolute -right-1 -top-1 rounded-full bg-danger px-1.5 text-xs text-white"
+                      onClick={() => removeGalleryImage(url)}
+                      aria-label="Remove image"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
           <div className="sm:col-span-2 space-y-2 rounded-xl border border-border bg-slate-50 p-3">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-primary-ink">Colors</p>
+              <p className="text-sm font-semibold text-primary-ink">
+                Colors ({colors.length}/{MAX_COLORS})
+              </p>
               <Button
                 type="button"
                 size="sm"
                 variant="secondary"
-                onClick={() => setColors((prev) => [...prev, { name: '', hex: '#CCCCCC', stockOnHand: '10' }])}
+                disabled={colors.length >= MAX_COLORS}
+                onClick={() =>
+                  setColors((prev) =>
+                    prev.length >= MAX_COLORS
+                      ? prev
+                      : [...prev, { name: '', hex: '#CCCCCC', stockOnHand: '10', imageUrl: '' }],
+                  )
+                }
               >
                 Add color
               </Button>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {colors.map((c, i) => (
-                <div key={i} className="grid grid-cols-[1fr_5rem_5rem_auto] items-end gap-2">
-                  <Field label={i === 0 ? 'Color name' : ''} htmlFor={`color-${i}`}>
-                    <Input
-                      id={`color-${i}`}
-                      placeholder="Black"
-                      value={c.name}
-                      onChange={(e) => {
-                        const name = e.target.value;
-                        setColors((prev) => prev.map((row, idx) => (idx === i ? { ...row, name } : row)));
-                      }}
-                    />
-                  </Field>
-                  <Field label={i === 0 ? 'Hex' : ''} htmlFor={`hex-${i}`}>
-                    <Input
-                      id={`hex-${i}`}
-                      type="color"
-                      value={c.hex}
-                      onChange={(e) => {
-                        const hex = e.target.value;
-                        setColors((prev) => prev.map((row, idx) => (idx === i ? { ...row, hex } : row)));
-                      }}
-                    />
-                  </Field>
-                  <Field label={i === 0 ? 'Stock' : ''} htmlFor={`stock-${i}`}>
-                    <Input
-                      id={`stock-${i}`}
-                      type="number"
-                      min={0}
-                      value={c.stockOnHand}
-                      onChange={(e) => {
-                        const stockOnHand = e.target.value;
-                        setColors((prev) => prev.map((row, idx) => (idx === i ? { ...row, stockOnHand } : row)));
-                      }}
-                    />
-                  </Field>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    disabled={colors.length <= 1}
-                    onClick={() => setColors((prev) => prev.filter((_, idx) => idx !== i))}
-                  >
-                    Remove
-                  </Button>
+                <div key={i} className="rounded-xl border border-border bg-white p-3">
+                  <div className="grid grid-cols-[1fr_5rem_5rem_auto] items-end gap-2">
+                    <Field label={i === 0 ? 'Color name' : ''} htmlFor={`color-${i}`}>
+                      <Input
+                        id={`color-${i}`}
+                        placeholder="Black"
+                        value={c.name}
+                        onChange={(e) => {
+                          const name = e.target.value;
+                          setColors((prev) => prev.map((row, idx) => (idx === i ? { ...row, name } : row)));
+                        }}
+                      />
+                    </Field>
+                    <Field label={i === 0 ? 'Hex' : ''} htmlFor={`hex-${i}`}>
+                      <Input
+                        id={`hex-${i}`}
+                        type="color"
+                        value={c.hex}
+                        onChange={(e) => {
+                          const hex = e.target.value;
+                          setColors((prev) => prev.map((row, idx) => (idx === i ? { ...row, hex } : row)));
+                        }}
+                      />
+                    </Field>
+                    <Field label={i === 0 ? 'Stock' : ''} htmlFor={`stock-${i}`}>
+                      <Input
+                        id={`stock-${i}`}
+                        type="number"
+                        min={0}
+                        value={c.stockOnHand}
+                        onChange={(e) => {
+                          const stockOnHand = e.target.value;
+                          setColors((prev) => prev.map((row, idx) => (idx === i ? { ...row, stockOnHand } : row)));
+                        }}
+                      />
+                    </Field>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      disabled={colors.length <= 1}
+                      onClick={() => setColors((prev) => prev.filter((_, idx) => idx !== i))}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                  <div className="mt-2">
+                    <p className="mb-1 text-xs font-medium text-muted">Color photo (from gallery)</p>
+                    {gallery.length ? (
+                      <div className="flex flex-wrap gap-2">
+                        {gallery.map((url) => (
+                          <button
+                            key={url}
+                            type="button"
+                            onClick={() =>
+                              setColors((prev) =>
+                                prev.map((row, idx) => (idx === i ? { ...row, imageUrl: url } : row)),
+                              )
+                            }
+                            className={cn(
+                              'relative h-14 w-14 overflow-hidden rounded-lg border-2',
+                              c.imageUrl === url ? 'border-primary-deep' : 'border-transparent',
+                            )}
+                            aria-label={`Assign image to ${c.name || 'color'}`}
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={mediaUrl(url)} alt="" className="h-full w-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted">Upload gallery images first, then tap one for this color.</p>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
             <p className="text-xs text-muted">
               Will create <strong>{variantPreview}</strong> sellable variants (each model × each color).
             </p>
-          </div>
-
-          <div className="sm:col-span-2 space-y-2">
-            <p className="text-sm font-semibold text-primary-ink">Cover / product image</p>
-            <ImageSizeGuide title="Recommended image size" items={[...PRODUCT_IMAGE_GUIDE]} />
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="btn btn-secondary cursor-pointer">
-                {uploading ? 'Uploading…' : 'Upload image'}
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/gif"
-                  className="sr-only"
-                  disabled={uploading}
-                  onChange={(e) => void onUpload(e.target.files?.[0] ?? null)}
-                />
-              </label>
-              {imageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={mediaUrl(imageUrl)} alt="" className="h-16 w-16 rounded-lg object-cover" />
-              ) : null}
-            </div>
           </div>
 
           <div className="flex items-end gap-4">
