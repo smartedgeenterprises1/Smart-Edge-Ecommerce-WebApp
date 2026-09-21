@@ -49,8 +49,10 @@
   --shadow-md: var(--shadow-md);
 }
 
-* {
-  border-color: var(--border);
+@layer base {
+  * {
+    border-color: var(--border);
+  }
 }
 
 html {

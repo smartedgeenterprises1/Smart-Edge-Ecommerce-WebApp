@@ -442,26 +442,50 @@ export default function AdminProductsPage() {
                   <div className="mt-2">
                     <p className="mb-1 text-xs font-medium text-muted">Color photo (from gallery)</p>
                     {gallery.length ? (
-                      <div className="flex flex-wrap gap-2">
-                        {gallery.map((url) => (
-                          <button
-                            key={url}
-                            type="button"
-                            onClick={() =>
-                              setColors((prev) =>
-                                prev.map((row, idx) => (idx === i ? { ...row, imageUrl: url } : row)),
-                              )
-                            }
-                            className={cn(
-                              'relative h-14 w-14 overflow-hidden rounded-lg border-2',
-                              c.imageUrl === url ? 'border-primary-deep' : 'border-transparent',
-                            )}
-                            aria-label={`Assign image to ${c.name || 'color'}`}
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={mediaUrl(url)} alt="" className="h-full w-full object-cover" />
-                          </button>
-                        ))}
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap gap-2">
+                          {gallery.map((url) => {
+                            const selected = c.imageUrl === url;
+                            return (
+                              <button
+                                key={url}
+                                type="button"
+                                onClick={() =>
+                                  setColors((prev) =>
+                                    prev.map((row, idx) =>
+                                      idx === i ? { ...row, imageUrl: selected ? '' : url } : row,
+                                    ),
+                                  )
+                                }
+                                className={cn(
+                                  'relative h-14 w-14 overflow-hidden rounded-lg border-2 transition',
+                                  selected
+                                    ? 'border-primary-deep ring-2 ring-primary-deep/40'
+                                    : 'border-border opacity-70 hover:opacity-100',
+                                )}
+                                aria-pressed={selected}
+                                aria-label={
+                                  selected
+                                    ? `Selected image for ${c.name || 'color'}`
+                                    : `Assign image to ${c.name || 'color'}`
+                                }
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={mediaUrl(url)} alt="" className="h-full w-full object-cover" />
+                                {selected ? (
+                                  <span className="absolute inset-x-0 bottom-0 bg-primary-ink/85 py-0.5 text-center text-[10px] font-bold text-white">
+                                    Selected
+                                  </span>
+                                ) : null}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {c.imageUrl ? (
+                          <p className="text-xs font-medium text-primary-ink">Photo assigned for this color.</p>
+                        ) : (
+                          <p className="text-xs text-muted">Tap a photo to assign it to this color.</p>
+                        )}
                       </div>
                     ) : (
                       <p className="text-xs text-muted">Upload gallery images first, then tap one for this color.</p>
