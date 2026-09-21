@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -26,26 +26,46 @@ function modelId(v: ProductVariant) {
   return typeof dm === 'string' ? dm : dm._id;
 }
 
+function available(v: ProductVariant) {
+  return Math.max(0, v.availableStock ?? v.stockOnHand - (v.stockReserved || 0));
+}
+
 export function ProductPurchase({ product }: { product: ProductDetail }) {
   const variants = useMemo(() => product.variants || [], [product.variants]);
-  const colors = useMemo(() => [...new Set(variants.map((v) => v.color))], [variants]);
-  const [color, setColor] = useState(colors[0] || '');
-  const modelsForColor = useMemo(() => {
-    const list = variants.filter((v) => v.color === color);
+
+  const allModels = useMemo(() => {
     const seen = new Set<string>();
-    return list.filter((v) => {
+    return variants.filter((v) => {
       const id = modelId(v) || 'universal';
       if (seen.has(id)) return false;
       seen.add(id);
       return true;
     });
-  }, [variants, color]);
+  }, [variants]);
 
-  const [deviceKey, setDeviceKey] = useState(() => modelId(modelsForColor[0]) || 'universal');
+  const [deviceKey, setDeviceKey] = useState(() => modelId(allModels[0]) || 'universal');
+
+  const colorsForModel = useMemo(() => {
+    const list = variants.filter((v) => (modelId(v) || 'universal') === deviceKey);
+    const byColor = new Map<string, ProductVariant>();
+    for (const v of list) {
+      if (!byColor.has(v.color)) byColor.set(v.color, v);
+    }
+    return [...byColor.values()];
+  }, [variants, deviceKey]);
+
+  const [color, setColor] = useState(() => colorsForModel[0]?.color || '');
+
+  useEffect(() => {
+    if (!colorsForModel.some((v) => v.color === color)) {
+      setColor(colorsForModel[0]?.color || '');
+    }
+  }, [colorsForModel, color]);
+
   const selected = useMemo(() => {
     return (
       variants.find((v) => v.color === color && (modelId(v) || 'universal') === deviceKey) ||
-      variants.find((v) => v.color === color) ||
+      variants.find((v) => (modelId(v) || 'universal') === deviceKey) ||
       variants[0]
     );
   }, [variants, color, deviceKey]);
@@ -56,7 +76,7 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
     const merged = [...fromVariant, ...fromProduct];
     const seen = new Set<string>();
     return merged.filter((img) => {
-      if (seen.has(img.url)) return false;
+      if (!img?.url || seen.has(img.url)) return false;
       seen.add(img.url);
       return true;
     });
@@ -70,13 +90,22 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
   const [wishBusy, setWishBusy] = useState(false);
   const router = useRouter();
 
-  const stock = selected?.availableStock ?? 0;
+  const stock = selected ? available(selected) : 0;
   const canBuy = Boolean(selected) && stock > 0;
+
+  function onModelChange(nextKey: string) {
+    setDeviceKey(nextKey);
+    const nextColors = variants.filter((v) => (modelId(v) || 'universal') === nextKey);
+    const preferred =
+      nextColors.find((v) => v.color === color && available(v) > 0) ||
+      nextColors.find((v) => available(v) > 0) ||
+      nextColors[0];
+    setColor(preferred?.color || '');
+    setActiveImg(0);
+  }
 
   function onColor(c: string) {
     setColor(c);
-    const first = variants.find((v) => v.color === c);
-    setDeviceKey(modelId(first!) || 'universal');
     setActiveImg(0);
   }
 
@@ -145,42 +174,16 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
           ) : null}
         </div>
 
-        {colors.length ? (
+        {allModels.length ? (
           <fieldset>
-            <legend className="label">Color: {color}</legend>
-            <div className="flex flex-wrap gap-2">
-              {colors.map((c) => {
-                const hex = variants.find((v) => v.color === c)?.colorHex || '#ccc';
-                return (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => onColor(c)}
-                    className={cn(
-                      'flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium',
-                      c === color ? 'border-primary-deep bg-primary-soft' : 'border-border bg-white',
-                    )}
-                    aria-pressed={c === color}
-                  >
-                    <span className="size-4 rounded-full border border-black/10" style={{ background: hex }} />
-                    {c}
-                  </button>
-                );
-              })}
-            </div>
-          </fieldset>
-        ) : null}
-
-        {modelsForColor.length ? (
-          <fieldset>
-            <legend className="label">Choose your phone model</legend>
+            <legend className="label">1. Choose your phone model</legend>
             <select
               className="input mt-1 w-full max-w-md"
               value={deviceKey}
-              onChange={(e) => setDeviceKey(e.target.value)}
+              onChange={(e) => onModelChange(e.target.value)}
               aria-label="Phone model"
             >
-              {modelsForColor.map((v) => {
+              {allModels.map((v) => {
                 const key = modelId(v) || 'universal';
                 return (
                   <option key={v._id} value={key}>
@@ -189,6 +192,38 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
                 );
               })}
             </select>
+          </fieldset>
+        ) : null}
+
+        {colorsForModel.length ? (
+          <fieldset>
+            <legend className="label">2. Choose color{color ? `: ${color}` : ''}</legend>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {colorsForModel.map((v) => {
+                const inStock = available(v) > 0;
+                return (
+                  <button
+                    key={v.color}
+                    type="button"
+                    onClick={() => inStock && onColor(v.color)}
+                    disabled={!inStock}
+                    className={cn(
+                      'flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium',
+                      v.color === color ? 'border-primary-deep bg-primary-soft' : 'border-border bg-white',
+                      !inStock && 'cursor-not-allowed opacity-40',
+                    )}
+                    aria-pressed={v.color === color}
+                    title={inStock ? v.color : `${v.color} — out of stock`}
+                  >
+                    <span
+                      className="size-4 rounded-full border border-black/10"
+                      style={{ background: v.colorHex || '#ccc' }}
+                    />
+                    {v.color}
+                  </button>
+                );
+              })}
+            </div>
           </fieldset>
         ) : null}
 
