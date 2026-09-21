@@ -91,7 +91,7 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
     setActiveImg(0);
   }, [deviceKey, color]);
 
-  const { addItem } = useCart();
+  const { addItem, quote } = useCart();
   const { toast } = useToast();
   const { user } = useAuth();
   const [qty, setQty] = useState(1);
@@ -107,6 +107,24 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
     setQty((q) => Math.min(q, maxQty));
   }, [maxQty]);
 
+  const firstCart = quote?.items?.[0];
+  const sameAsFirstMatch = useMemo(() => {
+    if (!firstCart) return null;
+    const key = firstCart.deviceModelId || 'universal';
+    const exact = variants.find(
+      (v) => (modelId(v) || 'universal') === key && v.color === firstCart.color && available(v) > 0,
+    );
+    if (exact) return exact;
+    const modelOnly = variants.find((v) => (modelId(v) || 'universal') === key && available(v) > 0);
+    return modelOnly || null;
+  }, [firstCart, variants]);
+
+  const alreadySameAsFirst =
+    Boolean(firstCart) &&
+    Boolean(selected) &&
+    (modelId(selected!) || 'universal') === (firstCart!.deviceModelId || 'universal') &&
+    selected!.color === firstCart!.color;
+
   function onModelChange(nextKey: string) {
     setDeviceKey(nextKey);
     const nextColors = variants.filter((v) => (modelId(v) || 'universal') === nextKey);
@@ -119,6 +137,12 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
 
   function onColor(c: string) {
     setColor(c);
+  }
+
+  function applySameAsFirst() {
+    if (!sameAsFirstMatch) return;
+    setDeviceKey(modelId(sameAsFirstMatch) || 'universal');
+    setColor(sameAsFirstMatch.color);
   }
 
   function add(buyNow = false) {
@@ -186,6 +210,19 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
             <p className="text-sm text-muted line-through">{formatPkr(selected.compareAtPriceMinor)}</p>
           ) : null}
         </div>
+
+        {firstCart && sameAsFirstMatch && !alreadySameAsFirst ? (
+          <button
+            type="button"
+            onClick={applySameAsFirst}
+            className="w-full max-w-md rounded-2xl border border-primary-deep/30 bg-primary-soft px-4 py-3 text-left transition hover:border-primary-deep"
+          >
+            <p className="text-sm font-semibold text-primary-ink">Same as first one</p>
+            <p className="mt-0.5 text-xs text-muted">
+              Use {firstCart.deviceBrandName} {firstCart.deviceModelName} · {firstCart.color}
+            </p>
+          </button>
+        ) : null}
 
         {allModels.length ? (
           <fieldset>
