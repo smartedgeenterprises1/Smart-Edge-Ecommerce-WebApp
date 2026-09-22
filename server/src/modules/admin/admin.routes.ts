@@ -207,6 +207,19 @@ adminRouter.post(
   }),
 );
 
+adminRouter.get(
+  '/products/:id',
+  asyncHandler(async (req, res) => {
+    const product = await Product.findById(req.params.id).lean();
+    if (!product) throw new AppError('Product not found', 404);
+    const variants = await ProductVariant.find({ productId: product._id })
+      .populate({ path: 'deviceModelId', select: 'name slug brandId' })
+      .sort({ color: 1, sku: 1 })
+      .lean();
+    ok(res, { ...product, variants });
+  }),
+);
+
 adminRouter.patch(
   '/products/:id',
   asyncHandler(async (req, res) => {
@@ -220,6 +233,7 @@ adminRouter.patch(
     for (const key of allowed) {
       if (req.body[key] !== undefined) update[key] = req.body[key];
     }
+    if (Array.isArray(update.images)) update.images = (update.images as unknown[]).slice(0, 15);
     if (update.status === 'active') update.publishedAt = new Date();
     const before = await Product.findById(req.params.id);
     if (!before) throw new AppError('Product not found', 404);
@@ -233,6 +247,193 @@ adminRouter.patch(
       after: update,
     });
     ok(res, product);
+  }),
+);
+
+/** Full cover edit: product fields + color/stock/image sync across model×color variants */
+adminRouter.post(
+  '/products/:id/edit',
+  validateBody(
+    z.object({
+      title: z.string().min(2).max(200),
+      description: z.string().optional(),
+      basePriceMinor: z.number().int().min(0),
+      compareAtPriceMinor: z.number().int().min(0).optional(),
+      status: z.enum(['draft', 'active', 'archived']).optional(),
+      caseType: z.string().optional(),
+      material: z.string().optional(),
+      isFeatured: z.boolean().optional(),
+      isNewArrival: z.boolean().optional(),
+      brandIds: z.array(z.string()).optional(),
+      compatibleDeviceModelIds: z.array(z.string()).min(1),
+      images: z
+        .array(z.object({ url: z.string(), alt: z.string().optional(), sortOrder: z.number().optional() }))
+        .max(15)
+        .optional(),
+      colors: z
+        .array(
+          z.object({
+            name: z.string().min(1),
+            hex: z.string().optional(),
+            stockOnHand: z.number().int().min(0).default(0),
+            imageUrl: z.string().min(1).optional(),
+          }),
+        )
+        .min(1)
+        .max(10),
+      syncVariantPrices: z.boolean().optional().default(true),
+    }),
+  ),
+  asyncHandler(async (req, res) => {
+    const product = await Product.findById(req.params.id);
+    if (!product) throw new AppError('Product not found', 404);
+
+    const modelIds: string[] = (req.body.compatibleDeviceModelIds || []).slice(0, 80);
+    const colorList = (req.body.colors || []).slice(0, 10);
+    const productImages = (req.body.images || []).slice(0, 15);
+
+    product.title = req.body.title;
+    product.description = req.body.description ?? product.description;
+    product.basePriceMinor = req.body.basePriceMinor;
+    if (req.body.compareAtPriceMinor !== undefined) product.compareAtPriceMinor = req.body.compareAtPriceMinor;
+    if (req.body.status) {
+      product.status = req.body.status;
+      if (req.body.status === 'active' && !product.publishedAt) product.publishedAt = new Date();
+    }
+    if (req.body.caseType !== undefined) product.caseType = req.body.caseType;
+    if (req.body.material !== undefined) product.material = req.body.material;
+    if (req.body.isFeatured !== undefined) product.isFeatured = req.body.isFeatured;
+    if (req.body.isNewArrival !== undefined) product.isNewArrival = req.body.isNewArrival;
+    if (req.body.brandIds) product.set('brandIds', req.body.brandIds);
+    product.set('compatibleDeviceModelIds', modelIds);
+    product.set('images', productImages);
+    await product.save();
+
+    const existing = await ProductVariant.find({ productId: product._id });
+    const colorNames = new Set(colorList.map((c: { name: string }) => c.name.trim().toLowerCase()));
+    const modelIdSet = new Set(modelIds.map(String));
+
+    let updated = 0;
+    let created = 0;
+    let deactivated = 0;
+
+    for (const color of colorList) {
+      const colorName = color.name.trim();
+      const colorImages = color.imageUrl
+        ? [{ url: color.imageUrl, alt: `${product.title} — ${colorName}`, sortOrder: 0 }]
+        : productImages;
+
+      for (const modelId of modelIds) {
+        const variant = existing.find(
+          (v) =>
+            String(v.deviceModelId) === String(modelId) &&
+            v.color.trim().toLowerCase() === colorName.toLowerCase(),
+        );
+
+        if (variant) {
+          variant.color = colorName;
+          variant.colorHex = color.hex || variant.colorHex || '#CCCCCC';
+          variant.images = colorImages as typeof variant.images;
+          variant.isActive = true;
+          if (req.body.syncVariantPrices !== false) {
+            variant.priceMinor = product.basePriceMinor;
+            if (product.compareAtPriceMinor != null) variant.compareAtPriceMinor = product.compareAtPriceMinor;
+          }
+          await variant.save();
+
+          const targetStock = color.stockOnHand ?? 0;
+          const delta = targetStock - variant.stockOnHand;
+          if (delta !== 0) {
+            await adjustStock({
+              variantId: String(variant._id),
+              delta,
+              reason: `Admin cover edit — set ${colorName} stock to ${targetStock}`,
+              actorUserId: String(req.user!._id),
+            });
+          }
+          updated += 1;
+        } else {
+          const model = await DeviceModel.findById(modelId).select('name slug');
+          const sku = `SE-${slugify(product.slug).slice(0, 12)}-${slugify(model?.slug || modelId).slice(0, 16)}-${slugify(colorName).slice(0, 10)}`
+            .toUpperCase()
+            .replace(/[^A-Z0-9-]/g, '')
+            .slice(0, 48);
+          await ProductVariant.create({
+            productId: product._id,
+            sku,
+            deviceModelId: modelId,
+            color: colorName,
+            colorHex: color.hex || '#CCCCCC',
+            priceMinor: product.basePriceMinor,
+            compareAtPriceMinor: product.compareAtPriceMinor,
+            stockOnHand: color.stockOnHand ?? 0,
+            images: colorImages,
+            isActive: true,
+          });
+          created += 1;
+        }
+      }
+    }
+
+    for (const v of existing) {
+      const modelOk = modelIdSet.has(String(v.deviceModelId));
+      const colorOk = colorNames.has(v.color.trim().toLowerCase());
+      if ((!modelOk || !colorOk) && v.isActive) {
+        v.isActive = false;
+        await v.save();
+        deactivated += 1;
+      }
+    }
+
+    await AuditLog.create({
+      actorUserId: req.user!._id,
+      action: 'product.edit',
+      entityType: 'Product',
+      entityId: String(product._id),
+      after: {
+        title: product.title,
+        status: product.status,
+        variantsUpdated: updated,
+        variantsCreated: created,
+        variantsDeactivated: deactivated,
+      },
+    });
+
+    const variants = await ProductVariant.find({ productId: product._id })
+      .populate({ path: 'deviceModelId', select: 'name slug brandId' })
+      .lean();
+
+    ok(res, {
+      product,
+      variants,
+      variantsUpdated: updated,
+      variantsCreated: created,
+      variantsDeactivated: deactivated,
+    });
+  }),
+);
+
+adminRouter.delete(
+  '/products/:id',
+  asyncHandler(async (req, res) => {
+    const product = await Product.findById(req.params.id);
+    if (!product) throw new AppError('Product not found', 404);
+    const variants = await ProductVariant.find({ productId: product._id }).select('_id sku');
+    const variantIds = variants.map((v) => v._id);
+    await ProductVariant.deleteMany({ productId: product._id });
+    await Product.findByIdAndDelete(product._id);
+    await AuditLog.create({
+      actorUserId: req.user!._id,
+      action: 'product.delete',
+      entityType: 'Product',
+      entityId: String(product._id),
+      before: {
+        title: product.title,
+        status: product.status,
+        variantsDeleted: variantIds.length,
+      },
+    });
+    ok(res, { deleted: true, variantsDeleted: variantIds.length });
   }),
 );
 
