@@ -119,20 +119,19 @@ export default async function HomePage() {
         </section>
       ) : null}
 
-      {(settings?.serviceClaims || []).length ? (
-        <section className="border-t border-border bg-primary-soft/50 py-12">
-          <div className="container-se grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {(settings?.serviceClaims || []).map((claim) => (
-              <div
-                key={claim}
-                className="rounded-2xl bg-white/80 px-4 py-5 text-center text-sm font-medium text-primary-ink shadow-sm"
-              >
-                {claim}
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
+      <section className="border-t border-border bg-primary-soft/50 py-8 sm:py-10">
+        <div className="container-se flex justify-center">
+          <p className="animate-delivery-line inline-flex items-center gap-2 text-center font-display text-lg font-bold tracking-tight text-primary-ink sm:text-xl md:text-2xl">
+            <span>Delivery All Across</span>
+            <span className="inline-flex items-center gap-1.5" aria-label="Pakistan">
+              <span className="text-2xl leading-none sm:text-3xl" aria-hidden>
+                🇵🇰
+              </span>
+              <span>Pakistan</span>
+            </span>
+          </p>
+        </div>
+      </section>
     </div>
   );
 }

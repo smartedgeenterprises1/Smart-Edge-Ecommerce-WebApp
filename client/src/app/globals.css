@@ -252,6 +252,22 @@ a {
   animation-delay: 0.24s;
 }
 
+@keyframes delivery-line {
+  0%,
+  100% {
+    opacity: 0.92;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
+}
+
+.animate-delivery-line {
+  animation: delivery-line 2.8s ease-in-out infinite;
+}
+
 /* Top announcement — typing / erasing */
 .announcement-bar {
   display: flex;
