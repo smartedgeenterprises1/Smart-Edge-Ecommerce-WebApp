@@ -2,14 +2,14 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
-import { formatPkr, toMinor } from '@/lib/format';
+import { formatPkr, fromMinor, toMinor } from '@/lib/format';
 import { mediaUrl } from '@/lib/config';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Select, Textarea } from '@/components/ui/field';
 import { Spinner, Badge } from '@/components/ui/misc';
 import { ImageSizeGuide, PRODUCT_IMAGE_GUIDE } from '@/components/admin/image-size-guide';
 import { cn } from '@/lib/cn';
-import type { Brand, DeviceModel, ProductListItem } from '@/types';
+import type { Brand, DeviceModel, ProductDetail, ProductListItem, ProductVariant } from '@/types';
 
 type ListResult = { items: ProductListItem[]; total: number; page: number; limit: number };
 type ColorRow = { name: string; hex: string; stockOnHand: string; imageUrl: string };
@@ -22,14 +22,55 @@ const DEFAULT_COLORS: ColorRow[] = [
   { name: 'Clear', hex: '#E5E7EB', stockOnHand: '10', imageUrl: '' },
 ];
 
+const EMPTY_FORM = {
+  title: '',
+  description: '',
+  basePrice: '1999',
+  status: 'active',
+  caseType: 'Soft case',
+  material: 'TPU',
+  isFeatured: false,
+  isNewArrival: true,
+};
+
+function modelIdOf(v: ProductVariant) {
+  const dm = v.deviceModelId;
+  if (!dm) return '';
+  return typeof dm === 'string' ? dm : dm._id;
+}
+
+function colorsFromVariants(variants: ProductVariant[]): ColorRow[] {
+  const active = variants.filter((v) => v.isActive !== false);
+  const source = active.length ? active : variants;
+  const byColor = new Map<string, ColorRow>();
+  for (const v of source) {
+    const key = v.color.trim().toLowerCase();
+    if (byColor.has(key)) {
+      const row = byColor.get(key)!;
+      row.stockOnHand = String(Math.min(Number(row.stockOnHand) || 0, v.stockOnHand || 0));
+      if (!row.imageUrl && v.images?.[0]?.url) row.imageUrl = v.images[0].url;
+      continue;
+    }
+    byColor.set(key, {
+      name: v.color,
+      hex: v.colorHex || '#CCCCCC',
+      stockOnHand: String(v.stockOnHand ?? 0),
+      imageUrl: v.images?.[0]?.url || '',
+    });
+  }
+  return [...byColor.values()];
+}
+
 export default function AdminProductsPage() {
   const [data, setData] = useState<ListResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [loadingEdit, setLoadingEdit] = useState(false);
 
   const [brands, setBrands] = useState<Brand[]>([]);
   const [models, setModels] = useState<DeviceModel[]>([]);
@@ -37,17 +78,7 @@ export default function AdminProductsPage() {
   const [selectedModelIds, setSelectedModelIds] = useState<string[]>([]);
   const [colors, setColors] = useState<ColorRow[]>(DEFAULT_COLORS);
   const [gallery, setGallery] = useState<string[]>([]);
-
-  const [form, setForm] = useState({
-    title: '',
-    description: '',
-    basePrice: '1999',
-    status: 'active',
-    caseType: 'Soft case',
-    material: 'TPU',
-    isFeatured: false,
-    isNewArrival: true,
-  });
+  const [form, setForm] = useState(EMPTY_FORM);
 
   const brandModels = useMemo(() => {
     if (!brandId) return models;
@@ -58,6 +89,7 @@ export default function AdminProductsPage() {
   }, [models, brandId]);
 
   const variantPreview = selectedModelIds.length * colors.filter((c) => c.name.trim()).length;
+  const isEditing = Boolean(editingId);
 
   async function load(page = 1) {
     setLoading(true);
@@ -87,6 +119,70 @@ export default function AdminProductsPage() {
       if (apple) setBrandId(apple._id);
     })().catch(() => undefined);
   }, []);
+
+  function resetForm(keepBrand = true) {
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+    setSelectedModelIds([]);
+    setColors(DEFAULT_COLORS);
+    setGallery([]);
+    if (!keepBrand) {
+      const apple = brands.find((x) => x.slug === 'apple');
+      setBrandId(apple?._id || brands[0]?._id || '');
+    }
+  }
+
+  function openCreate() {
+    resetForm();
+    setShowForm(true);
+    setMsg('');
+  }
+
+  function closeForm() {
+    setShowForm(false);
+    resetForm();
+    setMsg('');
+  }
+
+  async function openEdit(productId: string) {
+    setMsg('');
+    setLoadingEdit(true);
+    setShowForm(true);
+    setEditingId(productId);
+    try {
+      const detail = await api<ProductDetail>(`/api/admin/products/${productId}`);
+      const brand =
+        Array.isArray(detail.brandIds) && detail.brandIds.length
+          ? typeof detail.brandIds[0] === 'string'
+            ? detail.brandIds[0]
+            : detail.brandIds[0]._id
+          : '';
+      const modelIds = (detail.compatibleDeviceModelIds || [])
+        .map((m) => (typeof m === 'string' ? m : m._id))
+        .filter(Boolean);
+      // Prefer models from active variants if product list is empty
+      const fromVariants = [...new Set((detail.variants || []).map(modelIdOf).filter(Boolean))];
+      setBrandId(brand || brandId);
+      setSelectedModelIds(modelIds.length ? modelIds : fromVariants);
+      setGallery((detail.images || []).map((img) => img.url).slice(0, MAX_IMAGES));
+      setColors(colorsFromVariants(detail.variants || []).slice(0, MAX_COLORS) || DEFAULT_COLORS);
+      setForm({
+        title: detail.title || '',
+        description: detail.description || '',
+        basePrice: String(fromMinor(detail.basePriceMinor || 0)),
+        status: detail.status || 'active',
+        caseType: detail.caseType || 'Soft case',
+        material: detail.material || 'TPU',
+        isFeatured: Boolean(detail.isFeatured),
+        isNewArrival: Boolean(detail.isNewArrival),
+      });
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : 'Could not load product');
+      closeForm();
+    } finally {
+      setLoadingEdit(false);
+    }
+  }
 
   function toggleModel(id: string) {
     setSelectedModelIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -131,7 +227,19 @@ export default function AdminProductsPage() {
     setColors((prev) => prev.map((c) => (c.imageUrl === url ? { ...c, imageUrl: '' } : c)));
   }
 
-  async function createProduct(e: FormEvent) {
+  function buildCleanColors() {
+    return colors
+      .map((c) => ({
+        name: c.name.trim(),
+        hex: c.hex.trim() || '#CCCCCC',
+        stockOnHand: Math.max(0, Number(c.stockOnHand) || 0),
+        imageUrl: c.imageUrl || undefined,
+      }))
+      .filter((c) => c.name)
+      .slice(0, MAX_COLORS);
+  }
+
+  async function submitForm(e: FormEvent) {
     e.preventDefault();
     setMsg('');
     if (!brandId) {
@@ -142,15 +250,7 @@ export default function AdminProductsPage() {
       setMsg('Select at least one phone model for the dropdown');
       return;
     }
-    const cleanColors = colors
-      .map((c) => ({
-        name: c.name.trim(),
-        hex: c.hex.trim() || '#CCCCCC',
-        stockOnHand: Math.max(0, Number(c.stockOnHand) || 0),
-        imageUrl: c.imageUrl || undefined,
-      }))
-      .filter((c) => c.name)
-      .slice(0, MAX_COLORS);
+    const cleanColors = buildCleanColors();
     if (!cleanColors.length) {
       setMsg('Add at least one color');
       return;
@@ -162,41 +262,45 @@ export default function AdminProductsPage() {
 
     setBusy(true);
     try {
-      const res = await api<{ product: ProductListItem; variantsCreated: number }>('/api/admin/products', {
-        method: 'POST',
-        body: JSON.stringify({
-          title: form.title,
-          description: form.description,
-          basePriceMinor: toMinor(Number(form.basePrice) || 0),
-          status: form.status,
-          caseType: form.caseType,
-          material: form.material,
-          isFeatured: form.isFeatured,
-          isNewArrival: form.isNewArrival,
-          brandIds: [brandId],
-          compatibleDeviceModelIds: selectedModelIds,
-          images: gallery.map((url, i) => ({ url, alt: form.title, sortOrder: i })),
-          colors: cleanColors,
-        }),
-      });
-      setShowForm(false);
-      setForm({
-        title: '',
-        description: '',
-        basePrice: '1999',
-        status: 'active',
-        caseType: 'Soft case',
-        material: 'TPU',
-        isFeatured: false,
-        isNewArrival: true,
-      });
-      setSelectedModelIds([]);
-      setColors(DEFAULT_COLORS);
-      setGallery([]);
+      const payload = {
+        title: form.title,
+        description: form.description,
+        basePriceMinor: toMinor(Number(form.basePrice) || 0),
+        status: form.status,
+        caseType: form.caseType,
+        material: form.material,
+        isFeatured: form.isFeatured,
+        isNewArrival: form.isNewArrival,
+        brandIds: [brandId],
+        compatibleDeviceModelIds: selectedModelIds,
+        images: gallery.map((url, i) => ({ url, alt: form.title, sortOrder: i })),
+        colors: cleanColors,
+      };
+
+      if (editingId) {
+        const res = await api<{
+          variantsUpdated: number;
+          variantsCreated: number;
+          variantsDeactivated: number;
+        }>(`/api/admin/products/${editingId}/edit`, {
+          method: 'POST',
+          body: JSON.stringify({ ...payload, syncVariantPrices: true }),
+        });
+        setMsg(
+          `Cover updated — ${res.variantsUpdated} updated, ${res.variantsCreated} created, ${res.variantsDeactivated} deactivated`,
+        );
+      } else {
+        const res = await api<{ product: ProductListItem; variantsCreated: number }>('/api/admin/products', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        setMsg(`Product created with ${res.variantsCreated} variants (models × colors)`);
+      }
+
+      closeForm();
       await load();
-      setMsg(`Product created with ${res.variantsCreated} variants (models × colors)`);
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : 'Create failed');
+      setMsg(err instanceof Error ? err.message : isEditing ? 'Update failed' : 'Create failed');
     } finally {
       setBusy(false);
     }
@@ -211,14 +315,31 @@ export default function AdminProductsPage() {
     await load(data?.page || 1);
   }
 
+  async function deleteProduct(p: ProductListItem) {
+    const okConfirm = window.confirm(
+      `Delete "${p.title}" permanently?\n\nThis removes the cover and all its model/color variants. This cannot be undone.`,
+    );
+    if (!okConfirm) return;
+    setMsg('');
+    try {
+      const res = await api<{ deleted: boolean; variantsDeleted: number }>(`/api/admin/products/${p._id}`, {
+        method: 'DELETE',
+      });
+      if (editingId === p._id) closeForm();
+      await load(data?.page || 1);
+      setMsg(`Deleted "${p.title}" (${res.variantsDeleted} variants removed)`);
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : 'Delete failed');
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold text-primary-ink">Products</h1>
           <p className="text-sm text-muted">
-            One cover design = model dropdown first, then color swatches. Upload up to {MAX_IMAGES} photos and link one
-            per color.
+            Create or edit covers — images, price, description, colors, stock, and phone models.
           </p>
         </div>
         <div className="flex gap-2">
@@ -228,14 +349,30 @@ export default function AdminProductsPage() {
             <option value="draft">Draft</option>
             <option value="archived">Archived</option>
           </Select>
-          <Button onClick={() => setShowForm((v) => !v)}>{showForm ? 'Close' : 'New cover'}</Button>
+          {showForm ? (
+            <Button variant="secondary" onClick={closeForm}>
+              Close
+            </Button>
+          ) : (
+            <Button onClick={openCreate}>New cover</Button>
+          )}
         </div>
       </div>
 
       {msg ? <p className="text-sm text-primary-ink">{msg}</p> : null}
 
       {showForm ? (
-        <form onSubmit={createProduct} className="grid gap-4 rounded-2xl border border-border bg-white p-4 sm:grid-cols-2">
+        <form
+          onSubmit={submitForm}
+          className="grid gap-4 rounded-2xl border border-border bg-white p-4 sm:grid-cols-2"
+        >
+          <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
+            <h2 className="font-display text-lg font-bold text-primary-ink">
+              {isEditing ? 'Edit cover' : 'New cover'}
+            </h2>
+            {loadingEdit ? <Spinner /> : null}
+          </div>
+
           <Field label="Cover name / design" htmlFor="title">
             <Input
               id="title"
@@ -243,38 +380,67 @@ export default function AdminProductsPage() {
               placeholder="e.g. Matte Armor Case"
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
+              disabled={loadingEdit}
             />
           </Field>
           <Field label="Price (PKR)" htmlFor="basePrice">
             <Input
               id="basePrice"
               type="number"
+              min={0}
               required
               value={form.basePrice}
               onChange={(e) => setForm({ ...form, basePrice: e.target.value })}
+              disabled={loadingEdit}
             />
           </Field>
-
           <div className="sm:col-span-2">
             <Field label="Description" htmlFor="description">
               <Textarea
                 id="description"
-                placeholder="Customer picks phone model first, then color."
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
+                disabled={loadingEdit}
               />
             </Field>
           </div>
-
+          <Field label="Case type" htmlFor="caseType">
+            <Input
+              id="caseType"
+              value={form.caseType}
+              onChange={(e) => setForm({ ...form, caseType: e.target.value })}
+              disabled={loadingEdit}
+            />
+          </Field>
+          <Field label="Material" htmlFor="material">
+            <Input
+              id="material"
+              value={form.material}
+              onChange={(e) => setForm({ ...form, material: e.target.value })}
+              disabled={loadingEdit}
+            />
+          </Field>
+          <Field label="Status" htmlFor="status">
+            <Select
+              id="status"
+              value={form.status}
+              onChange={(e) => setForm({ ...form, status: e.target.value })}
+              disabled={loadingEdit}
+            >
+              <option value="active">Active</option>
+              <option value="draft">Draft</option>
+              <option value="archived">Archived</option>
+            </Select>
+          </Field>
           <Field label="Brand" htmlFor="brand">
             <Select
               id="brand"
-              required
               value={brandId}
               onChange={(e) => {
                 setBrandId(e.target.value);
                 setSelectedModelIds([]);
               }}
+              disabled={loadingEdit}
             >
               <option value="">Select brand</option>
               {brands.map((b) => (
@@ -284,49 +450,48 @@ export default function AdminProductsPage() {
               ))}
             </Select>
           </Field>
-          <Field label="Status" htmlFor="status">
-            <Select id="status" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-              <option value="draft">Draft</option>
-              <option value="active">Active</option>
-              <option value="archived">Archived</option>
-            </Select>
-          </Field>
-
-          <Field label="Case type" htmlFor="caseType">
-            <Input id="caseType" value={form.caseType} onChange={(e) => setForm({ ...form, caseType: e.target.value })} />
-          </Field>
-          <Field label="Material" htmlFor="material">
-            <Input id="material" value={form.material} onChange={(e) => setForm({ ...form, material: e.target.value })} />
-          </Field>
 
           <div className="sm:col-span-2 space-y-2 rounded-xl border border-border bg-slate-50 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-primary-ink">Phone models (customer chooses first)</p>
+              <p className="text-sm font-semibold text-primary-ink">
+                Phone models ({selectedModelIds.length} selected)
+              </p>
               <div className="flex gap-2">
-                <Button type="button" size="sm" variant="secondary" onClick={selectAllModels}>
+                <Button type="button" size="sm" variant="secondary" onClick={selectAllModels} disabled={loadingEdit}>
                   Select all
                 </Button>
-                <Button type="button" size="sm" variant="ghost" onClick={clearModels}>
+                <Button type="button" size="sm" variant="ghost" onClick={clearModels} disabled={loadingEdit}>
                   Clear
                 </Button>
               </div>
             </div>
-            <div className="grid max-h-48 grid-cols-1 gap-1 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
-              {brandModels.map((m) => (
-                <label key={m._id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-white">
-                  <input
-                    type="checkbox"
-                    checked={selectedModelIds.includes(m._id)}
-                    onChange={() => toggleModel(m._id)}
-                  />
-                  {m.name}
-                </label>
-              ))}
+            <div className="flex max-h-40 flex-wrap gap-2 overflow-y-auto">
+              {brandModels.map((m) => {
+                const on = selectedModelIds.includes(m._id);
+                return (
+                  <button
+                    key={m._id}
+                    type="button"
+                    disabled={loadingEdit}
+                    onClick={() => toggleModel(m._id)}
+                    className={cn(
+                      'rounded-full border px-3 py-1 text-xs font-medium',
+                      on ? 'border-primary-deep bg-primary-soft text-primary-ink' : 'border-border bg-white',
+                    )}
+                  >
+                    {m.name}
+                  </button>
+                );
+              })}
             </div>
-            {!brandModels.length ? <p className="text-xs text-muted">No models for this brand yet.</p> : null}
+            {isEditing ? (
+              <p className="text-xs text-muted">
+                Adding models creates new variants. Removing a model deactivates its variants (not deleted).
+              </p>
+            ) : null}
           </div>
 
-          <div className="sm:col-span-2 space-y-3 rounded-xl border border-border bg-slate-50 p-3">
+          <div className="sm:col-span-2 space-y-2 rounded-xl border border-border bg-slate-50 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold text-primary-ink">
                 Cover images ({gallery.length}/{MAX_IMAGES})
@@ -338,7 +503,7 @@ export default function AdminProductsPage() {
                   accept="image/jpeg,image/png,image/webp,image/gif"
                   multiple
                   className="sr-only"
-                  disabled={uploading || gallery.length >= MAX_IMAGES}
+                  disabled={uploading || loadingEdit || gallery.length >= MAX_IMAGES}
                   onChange={(e) => {
                     void onUploadFiles(e.target.files);
                     e.target.value = '';
@@ -361,6 +526,7 @@ export default function AdminProductsPage() {
                       className="absolute -right-1 -top-1 rounded-full bg-danger px-1.5 text-xs text-white"
                       onClick={() => removeGalleryImage(url)}
                       aria-label="Remove image"
+                      disabled={loadingEdit}
                     >
                       ×
                     </button>
@@ -379,7 +545,7 @@ export default function AdminProductsPage() {
                 type="button"
                 size="sm"
                 variant="secondary"
-                disabled={colors.length >= MAX_COLORS}
+                disabled={colors.length >= MAX_COLORS || loadingEdit}
                 onClick={() =>
                   setColors((prev) =>
                     prev.length >= MAX_COLORS
@@ -400,6 +566,7 @@ export default function AdminProductsPage() {
                         id={`color-${i}`}
                         placeholder="Black"
                         value={c.name}
+                        disabled={loadingEdit}
                         onChange={(e) => {
                           const name = e.target.value;
                           setColors((prev) => prev.map((row, idx) => (idx === i ? { ...row, name } : row)));
@@ -411,6 +578,7 @@ export default function AdminProductsPage() {
                         id={`hex-${i}`}
                         type="color"
                         value={c.hex}
+                        disabled={loadingEdit}
                         onChange={(e) => {
                           const hex = e.target.value;
                           setColors((prev) => prev.map((row, idx) => (idx === i ? { ...row, hex } : row)));
@@ -423,6 +591,7 @@ export default function AdminProductsPage() {
                         type="number"
                         min={0}
                         value={c.stockOnHand}
+                        disabled={loadingEdit}
                         onChange={(e) => {
                           const stockOnHand = e.target.value;
                           setColors((prev) => prev.map((row, idx) => (idx === i ? { ...row, stockOnHand } : row)));
@@ -433,7 +602,7 @@ export default function AdminProductsPage() {
                       type="button"
                       size="sm"
                       variant="ghost"
-                      disabled={colors.length <= 1}
+                      disabled={colors.length <= 1 || loadingEdit}
                       onClick={() => setColors((prev) => prev.filter((_, idx) => idx !== i))}
                     >
                       Remove
@@ -450,6 +619,7 @@ export default function AdminProductsPage() {
                               <button
                                 key={url}
                                 type="button"
+                                disabled={loadingEdit}
                                 onClick={() =>
                                   setColors((prev) =>
                                     prev.map((row, idx) =>
@@ -464,11 +634,6 @@ export default function AdminProductsPage() {
                                     : 'border-border opacity-70 hover:opacity-100',
                                 )}
                                 aria-pressed={selected}
-                                aria-label={
-                                  selected
-                                    ? `Selected image for ${c.name || 'color'}`
-                                    : `Assign image to ${c.name || 'color'}`
-                                }
                               >
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img src={mediaUrl(url)} alt="" className="h-full w-full object-cover" />
@@ -495,7 +660,8 @@ export default function AdminProductsPage() {
               ))}
             </div>
             <p className="text-xs text-muted">
-              Will create <strong>{variantPreview}</strong> sellable variants (each model × each color).
+              Will sync <strong>{variantPreview}</strong> sellable variants (each model × each color).
+              {isEditing ? ' Stock is applied per color across all models.' : null}
             </p>
           </div>
 
@@ -504,6 +670,7 @@ export default function AdminProductsPage() {
               <input
                 type="checkbox"
                 checked={form.isFeatured}
+                disabled={loadingEdit}
                 onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })}
               />
               Featured
@@ -512,16 +679,22 @@ export default function AdminProductsPage() {
               <input
                 type="checkbox"
                 checked={form.isNewArrival}
+                disabled={loadingEdit}
                 onChange={(e) => setForm({ ...form, isNewArrival: e.target.checked })}
               />
               New arrival
             </label>
           </div>
 
-          <div className="sm:col-span-2">
-            <Button type="submit" disabled={busy}>
-              {busy ? 'Creating…' : 'Create cover + variants'}
+          <div className="sm:col-span-2 flex flex-wrap gap-2">
+            <Button type="submit" disabled={busy || loadingEdit}>
+              {busy ? (isEditing ? 'Saving…' : 'Creating…') : isEditing ? 'Save changes' : 'Create cover + variants'}
             </Button>
+            {isEditing ? (
+              <Button type="button" variant="secondary" onClick={closeForm} disabled={busy}>
+                Cancel
+              </Button>
+            ) : null}
           </div>
         </form>
       ) : null}
@@ -543,17 +716,37 @@ export default function AdminProductsPage() {
               {(data?.items || []).map((p) => (
                 <tr key={p._id} className="border-b border-border last:border-0">
                   <td className="px-4 py-3">
-                    <p className="font-medium">{p.title}</p>
-                    <p className="text-xs text-muted">{p.slug}</p>
+                    <div className="flex items-center gap-3">
+                      {p.images?.[0]?.url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={mediaUrl(p.images[0].url)}
+                          alt=""
+                          className="size-12 rounded-lg border border-border object-cover"
+                        />
+                      ) : null}
+                      <div>
+                        <p className="font-medium">{p.title}</p>
+                        <p className="text-xs text-muted">{p.slug}</p>
+                      </div>
+                    </div>
                   </td>
                   <td className="px-4 py-3">{formatPkr(p.basePriceMinor)}</td>
                   <td className="px-4 py-3">
                     <Badge>{p.status}</Badge>
                   </td>
                   <td className="px-4 py-3">
-                    <Button size="sm" variant="secondary" onClick={() => void toggleStatus(p)}>
-                      {p.status === 'active' ? 'Archive' : 'Activate'}
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" onClick={() => void openEdit(p._id)}>
+                        Edit
+                      </Button>
+                      <Button size="sm" variant="secondary" onClick={() => void toggleStatus(p)}>
+                        {p.status === 'active' ? 'Archive' : 'Activate'}
+                      </Button>
+                      <Button size="sm" variant="danger" onClick={() => void deleteProduct(p)}>
+                        Delete
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
