@@ -5,7 +5,7 @@ import { BrandLogo } from '@/components/catalog/BrandLogo';
 import { serverApiSoft } from '@/lib/api';
 import { mediaUrl } from '@/lib/config';
 import { buildMetadata } from '@/lib/seo';
-import type { Brand, CatalogResult, Category, StoreSettings } from '@/types';
+import type { Brand, CatalogResult, StoreSettings } from '@/types';
 
 export const metadata = buildMetadata({
   title: 'Premium phone covers',
@@ -13,15 +13,16 @@ export const metadata = buildMetadata({
 });
 
 export default async function HomePage() {
-  const [settings, brands, categories, featured, newest] = await Promise.all([
+  const [settings, brands, featured, newest] = await Promise.all([
     serverApiSoft<StoreSettings>('/api/settings'),
     serverApiSoft<Brand[]>('/api/catalog/brands'),
-    serverApiSoft<Category[]>('/api/catalog/categories'),
     serverApiSoft<CatalogResult>('/api/catalog/products?featured=true&limit=8'),
     serverApiSoft<CatalogResult>('/api/catalog/products?newArrival=true&limit=8'),
   ]);
 
   const heroSrc = settings?.heroImageUrl ? mediaUrl(settings.heroImageUrl) : null;
+  const featuredItems = featured?.items || [];
+  const newestItems = newest?.items || [];
 
   return (
     <div>
@@ -92,37 +93,28 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="border-y border-border bg-white/70 py-14">
-        <div className="container-se">
+      {newestItems.length ? (
+        <section className="container-se py-14">
           <div className="mb-6 flex items-end justify-between">
-            <h2 className="font-display text-2xl font-bold">Featured</h2>
-            <Link href="/shop?featured=true" className="text-sm font-semibold text-primary-ink hover:underline">
+            <h2 className="font-display text-2xl font-bold">New arrivals</h2>
+            <Link href="/shop?sort=newest" className="text-sm font-semibold text-primary-ink hover:underline">
               See more
             </Link>
           </div>
-          <ProductGrid products={featured?.items || []} />
-        </div>
-      </section>
+          <ProductGrid products={newestItems} />
+        </section>
+      ) : null}
 
-      <section className="container-se py-14">
-        <div className="mb-6 flex items-end justify-between">
-          <h2 className="font-display text-2xl font-bold">New arrivals</h2>
-          <Link href="/shop?sort=newest" className="text-sm font-semibold text-primary-ink hover:underline">
-            See more
-          </Link>
-        </div>
-        <ProductGrid products={newest?.items || []} />
-      </section>
-
-      {(categories || []).length ? (
-        <section className="container-se pb-14">
-          <h2 className="mb-6 font-display text-2xl font-bold">Categories</h2>
-          <div className="flex flex-wrap gap-2">
-            {(categories || []).map((c) => (
-              <Link key={c._id} href={`/category/${c.slug}`} className="badge bg-white border border-border px-4 py-2">
-                {c.name}
+      {featuredItems.length ? (
+        <section className="border-y border-border bg-white/70 py-14">
+          <div className="container-se">
+            <div className="mb-6 flex items-end justify-between">
+              <h2 className="font-display text-2xl font-bold">Featured</h2>
+              <Link href="/shop?featured=true" className="text-sm font-semibold text-primary-ink hover:underline">
+                See more
               </Link>
-            ))}
+            </div>
+            <ProductGrid products={featuredItems} />
           </div>
         </section>
       ) : null}

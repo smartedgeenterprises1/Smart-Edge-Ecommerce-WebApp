@@ -21,6 +21,11 @@ export function buildMetadata(opts: {
     description,
     alternates: { canonical: url },
     robots: opts.noIndex ? { index: false, follow: false } : { index: true, follow: true },
+    icons: {
+      icon: [{ url: '/logo.png', type: 'image/png' }],
+      apple: [{ url: '/logo.png', type: 'image/png' }],
+      shortcut: '/logo.png',
+    },
     openGraph: {
       title,
       description,
@@ -28,7 +33,7 @@ export function buildMetadata(opts: {
       siteName: config.storeName,
       locale: 'en_PK',
       type: 'website',
-      images: opts.image ? [{ url: opts.image }] : [{ url: `${config.siteUrl}/logo.jpg` }],
+      images: opts.image ? [{ url: opts.image }] : [{ url: `${config.siteUrl}/logo.png` }],
     },
   };
 }
