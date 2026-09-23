@@ -123,7 +123,7 @@ export function Header({ announcement: _announcement }: { announcement?: string;
             />
             <span className="min-w-0 truncate font-display text-sm font-bold tracking-tight text-primary-ink sm:text-xl">
               <span className="sm:hidden">SMART EDGE</span>
-              <span className="hidden sm:inline">SMART EDGE ENTERPRISE</span>
+              <span className="hidden sm:inline">SMART EDGE ENTERPRISES</span>
             </span>
           </Link>
 
