@@ -15,68 +15,23 @@ const categoryBrands = [
   { href: '/brand/samsung', label: 'Samsung', slug: 'samsung' },
 ];
 
-const ANNOUNCEMENT_LINES = [
-  'Welcome to SMART EDGE ENTERPRISE, Buy covers for IPhone, Google Pixel, and Samsung Phones.',
-  'Free Delivery on Orders Above 2499 Rs',
+const ANNOUNCEMENT_HEADLINES = [
+  'SMART EDGE ENTERPRISE — Premium Phone Covers for iPhone, Pixel & Galaxy',
+  'Free Delivery Across Pakistan on Orders Above Rs 2,499',
+  'Model-Perfect Fit — Choose Your Exact Phone Before You Buy',
+  'Cash on Delivery Available Nationwide',
 ] as const;
 
-const TYPE_MS = 38;
-const ERASE_MS = 22;
-const HOLD_MS = 4500;
-
 function AnnouncementBar() {
-  const [lineIndex, setLineIndex] = useState(0);
-  const [display, setDisplay] = useState('');
-  const [phase, setPhase] = useState<'typing' | 'holding' | 'erasing'>('typing');
-
-  useEffect(() => {
-    const reduceMotion =
-      typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    if (reduceMotion) {
-      setDisplay(ANNOUNCEMENT_LINES[lineIndex]);
-      const id = setInterval(() => {
-        setLineIndex((i) => (i + 1) % ANNOUNCEMENT_LINES.length);
-      }, HOLD_MS);
-      return () => clearInterval(id);
-    }
-
-    const full = ANNOUNCEMENT_LINES[lineIndex];
-    let timer: ReturnType<typeof setTimeout>;
-
-    if (phase === 'typing') {
-      if (display.length < full.length) {
-        timer = setTimeout(() => setDisplay(full.slice(0, display.length + 1)), TYPE_MS);
-      } else {
-        setPhase('holding');
-      }
-    } else if (phase === 'holding') {
-      timer = setTimeout(() => setPhase('erasing'), HOLD_MS);
-    } else if (phase === 'erasing') {
-      if (display.length > 0) {
-        timer = setTimeout(() => setDisplay(display.slice(0, -1)), ERASE_MS);
-      } else {
-        setLineIndex((i) => (i + 1) % ANNOUNCEMENT_LINES.length);
-        setPhase('typing');
-      }
-    }
-
-    return () => clearTimeout(timer);
-  }, [display, phase, lineIndex]);
-
-  // When reduced-motion lineIndex changes, sync display
-  useEffect(() => {
-    const reduceMotion =
-      typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduceMotion) setDisplay(ANNOUNCEMENT_LINES[lineIndex]);
-  }, [lineIndex]);
+  const ticker = `${ANNOUNCEMENT_HEADLINES.join('   ·   ')}   ·   `;
 
   return (
-    <div className="announcement-bar bg-primary-ink" role="status" aria-live="polite">
-      <p className="announcement-glow">
-        <span>{display}</span>
-        <span className="announcement-caret" aria-hidden="true" />
-      </p>
+    <div className="announcement-bar bg-primary-ink" role="status" aria-live="off">
+      <div className="announcement-marquee" aria-hidden="true">
+        <p className="announcement-track">{ticker}</p>
+        <p className="announcement-track">{ticker}</p>
+      </div>
+      <p className="sr-only">{ANNOUNCEMENT_HEADLINES.join('. ')}</p>
     </div>
   );
 }
