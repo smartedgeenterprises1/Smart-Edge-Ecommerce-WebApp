@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "seed": "tsx src/scripts/seed.ts",
+    "upsert-iphones": "tsx src/scripts/upsert-iphone-models.ts",
     "create-admin": "tsx src/scripts/create-admin.ts"
   },
   "engines": {
