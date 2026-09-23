@@ -166,7 +166,7 @@ export function Header({ announcement: _announcement }: { announcement?: string;
               className="size-9 shrink-0 object-contain sm:size-11"
               priority
             />
-            <span className="min-w-0 truncate font-display text-base font-bold tracking-tight text-primary-ink sm:text-xl">
+            <span className="min-w-0 truncate font-display text-sm font-bold tracking-tight text-primary-ink sm:text-xl">
               <span className="sm:hidden">SMART EDGE</span>
               <span className="hidden sm:inline">SMART EDGE ENTERPRISE</span>
             </span>

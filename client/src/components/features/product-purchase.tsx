@@ -170,20 +170,20 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
   }
 
   return (
-    <div className="grid gap-8 lg:grid-cols-2">
-      <div>
-        <div className="relative aspect-square overflow-hidden rounded-3xl border border-border bg-muted-bg">
+    <div className="grid min-w-0 gap-8 lg:grid-cols-2">
+      <div className="min-w-0 w-full">
+        <div className="relative aspect-square w-full max-w-full overflow-hidden rounded-3xl border border-border bg-muted-bg">
           <Image
             src={mediaUrl(images[activeImg]?.url || product.images?.[0]?.url)}
             alt={images[activeImg]?.alt || product.title}
             fill
             priority
-            className="object-cover"
+            className="object-contain"
             sizes="(max-width:1024px) 100vw, 50vw"
           />
         </div>
         {images.length > 1 ? (
-          <div className="mt-3 flex gap-2 overflow-x-auto">
+          <div className="mt-3 flex max-w-full gap-2 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch]">
             {images.map((img, i) => (
               <button
                 key={img.url + i}
@@ -202,7 +202,7 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
         ) : null}
       </div>
 
-      <div className="space-y-5">
+      <div className="min-w-0 space-y-5">
         <div>
           <h1 className="font-display text-3xl font-bold text-primary-ink sm:text-4xl">{product.title}</h1>
           <p className="mt-2 text-2xl font-semibold">{formatPkr(selected?.priceMinor ?? product.basePriceMinor)}</p>
@@ -215,7 +215,7 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
           <button
             type="button"
             onClick={applySameAsFirst}
-            className="w-full max-w-md rounded-2xl border border-primary-deep/30 bg-primary-soft px-4 py-3 text-left transition hover:border-primary-deep"
+            className="w-full rounded-2xl border border-primary-deep/30 bg-primary-soft px-4 py-3 text-left transition hover:border-primary-deep"
           >
             <p className="text-sm font-semibold text-primary-ink">Same as first one</p>
             <p className="mt-0.5 text-xs text-muted">
@@ -225,10 +225,10 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
         ) : null}
 
         {allModels.length ? (
-          <fieldset>
+          <fieldset className="min-w-0">
             <legend className="label">1. Choose your phone model</legend>
             <select
-              className="input mt-1 w-full max-w-md"
+              className="input mt-1 w-full min-w-0 max-w-full"
               value={deviceKey}
               onChange={(e) => onModelChange(e.target.value)}
               aria-label="Phone model"
@@ -246,7 +246,7 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
         ) : null}
 
         {colorsForModel.length ? (
-          <fieldset>
+          <fieldset className="min-w-0">
             <legend className="label">2. Choose color{color ? `: ${color}` : ''}</legend>
             <div className="mt-2 flex flex-wrap gap-2">
               {colorsForModel.map((v) => {
@@ -258,7 +258,7 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
                     onClick={() => inStock && onColor(v.color)}
                     disabled={!inStock}
                     className={cn(
-                      'flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium',
+                      'inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium',
                       v.color === color ? 'border-primary-deep bg-primary-soft' : 'border-border bg-white',
                       !inStock && 'cursor-not-allowed opacity-40',
                     )}
@@ -266,10 +266,10 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
                     title={inStock ? v.color : `${v.color} — out of stock`}
                   >
                     <span
-                      className="size-4 rounded-full border border-black/10"
+                      className="size-4 shrink-0 rounded-full border border-black/10"
                       style={{ background: v.colorHex || '#ccc' }}
                     />
-                    {v.color}
+                    <span className="truncate">{v.color}</span>
                   </button>
                 );
               })}
@@ -277,13 +277,18 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
           </fieldset>
         ) : null}
 
-        <p className="text-sm">
+        <p className="break-words text-sm">
           {canBuy ? (
             <span className="font-medium text-success">{stock} in stock</span>
           ) : (
             <span className="font-medium text-danger">Out of stock</span>
           )}
-          {selected?.sku ? <span className="text-muted"> · SKU {selected.sku}</span> : null}
+          {selected?.sku ? (
+            <span className="mt-1 block break-all text-xs text-muted sm:mt-0 sm:inline sm:text-sm">
+              {' '}
+              · SKU {selected.sku}
+            </span>
+          ) : null}
         </p>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -298,10 +303,15 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
             disabled={!canBuy}
             onChange={setQty}
           />
-          <Button onClick={() => add(false)} disabled={!canBuy}>
+          <Button onClick={() => add(false)} disabled={!canBuy} className="min-w-0 flex-1 sm:flex-none">
             Add to cart
           </Button>
-          <Button variant="secondary" onClick={() => add(true)} disabled={!canBuy}>
+          <Button
+            variant="secondary"
+            onClick={() => add(true)}
+            disabled={!canBuy}
+            className="min-w-0 flex-1 sm:flex-none"
+          >
             Buy now
           </Button>
           <Button variant="ghost" onClick={toggleWishlist} disabled={wishBusy} aria-label="Add to wishlist">
@@ -311,8 +321,8 @@ export function ProductPurchase({ product }: { product: ProductDetail }) {
         {msg ? <p className="text-sm text-primary-ink" role="status">{msg}</p> : null}
 
         {product.description ? (
-          <div className="prose prose-sm max-w-none border-t border-border pt-5 text-muted">
-            <p className="whitespace-pre-wrap">{product.description}</p>
+          <div className="prose prose-sm max-w-none break-words border-t border-border pt-5 text-muted">
+            <p className="whitespace-pre-wrap break-words">{product.description}</p>
           </div>
         ) : null}
         {product.features?.length ? (

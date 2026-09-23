@@ -39,7 +39,7 @@ export default async function ProductPage({ params }: Props) {
   ];
 
   return (
-    <div className="container-se py-10">
+    <div className="container-se min-w-0 overflow-x-hidden py-10">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd(product)) }}
@@ -48,7 +48,7 @@ export default async function ProductPage({ params }: Props) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd(crumbs)) }}
       />
-      <p className="mb-6 text-sm text-muted">
+      <p className="mb-6 break-words text-sm text-muted">
         <Link href="/shop" className="hover:text-primary-ink">
           Shop
         </Link>{' '}
@@ -56,7 +56,7 @@ export default async function ProductPage({ params }: Props) {
       </p>
       <ProductPurchase product={product} />
       {related?.length ? (
-        <section className="mt-16">
+        <section className="mt-16 min-w-0">
           <h2 className="mb-6 font-display text-2xl font-bold">Related covers</h2>
           <ProductGrid products={related} />
         </section>
