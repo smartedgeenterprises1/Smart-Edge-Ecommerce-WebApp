@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
+import { FloatingWhatsApp } from '@/components/layout/FloatingWhatsApp';
 import { serverApiSoft } from '@/lib/api';
 import type { StoreSettings } from '@/types';
 
@@ -20,6 +21,7 @@ export default async function StoreLayout({ children }: { children: React.ReactN
       />
       <main className="min-w-0 flex-1 overflow-x-hidden">{children}</main>
       <Footer settings={settings} />
+      <FloatingWhatsApp phone={settings?.contactPhone || '03079036369'} />
     </div>
   );
 }
